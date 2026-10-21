@@ -64,6 +64,26 @@ class RequestError(PolzaError):
     """Other 4xx: bad request, not found, payload too large."""
 
 
+class PolzaConnectionError(PolzaError):
+    """The request never got an HTTP response (DNS, connect, timeout)."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(0, message)
+
+
+class EmptyResponseError(PolzaError):
+    """A 2xx response without usable text: no choices, or empty content.
+
+    `reasoning` carries the model's reasoning text, if any; with `finish_reason == "length"` it
+    usually means `max_tokens` was spent on thinking.
+    """
+
+    def __init__(self, message: str, finish_reason: str | None = None, reasoning: str | None = None) -> None:
+        super().__init__(200, message)
+        self.finish_reason = finish_reason
+        self.reasoning = reasoning
+
+
 _BY_STATUS: dict[int, type[PolzaError]] = {
     401: AuthError,
     402: InsufficientFundsError,

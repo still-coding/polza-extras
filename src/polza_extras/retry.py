@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 from .errors import PolzaError, RateLimitError
 
-_BACKOFF_STATUSES = frozenset({408, 500, 502})
+_BACKOFF_STATUSES = frozenset({0, 408, 500, 502})
 
 
 @dataclass(frozen=True)
