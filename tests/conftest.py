@@ -1,6 +1,6 @@
 import pytest
 
-from polza_extras import Polza
+from polza_extras import AsyncPolza, Polza
 from tests.fake_server import FakeServer
 
 BASE = "https://polza.ai/api/v1"
@@ -43,3 +43,10 @@ def polza(server, sleeps):
 @pytest.fixture
 def chat_route(server):
     return server.post(f"{BASE}/chat/completions")
+
+
+@pytest.fixture
+def apolza(server, sleeps):
+    async def sleep(seconds):
+        sleeps.append(seconds)
+    return AsyncPolza(api_key="test-key", sleep=sleep, http_client=server.async_http_client())

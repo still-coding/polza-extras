@@ -62,3 +62,14 @@ def test_stream_returns_text_and_final_ruble_cost(polza):
                                     max_tokens=60, reasoning={"type": "disabled"}))
     assert "".join(e.delta for e in events).strip()
     assert events[-1].cost_rub is not None and events[-1].cost_rub > 0
+
+
+async def test_async_chat_and_stream():
+    from polza_extras import AsyncPolza
+    apolza = AsyncPolza()
+    result = await apolza.chat(CHEAP, [{"role": "user", "content": "Скажи «ок»"}], max_tokens=20,
+                               reasoning={"type": "disabled"})
+    assert result.text.strip() and result.cost_rub
+    events = [e async for e in apolza.chat_stream(CHEAP, [{"role": "user", "content": "Скажи «ок»"}],
+                                                  max_tokens=20, reasoning={"type": "disabled"})]
+    assert events[-1].cost_rub

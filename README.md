@@ -40,6 +40,29 @@ data = polza.chat(model, messages, json=True)   # response_format={"type": "json
 polza.openai                               # the configured openai.OpenAI client, for anything else
 ```
 
+### Streaming
+
+```python
+for event in polza.chat_stream("anthropic/claude-haiku-5.5", messages, max_tokens=200):
+    print(event.delta, end="", flush=True)   # event.reasoning holds thinking deltas, if any
+print(event.cost_rub)                        # the last event carries usage and cost
+```
+
+Errors before the first chunk are retried like `chat()`. An error event inside the stream raises `StreamError`; text already yielded stays yielded, and the request is not retried.
+
+### Async
+
+`AsyncPolza` has the same methods, awaited (`async for` for `chat_stream`):
+
+```python
+from polza_extras import AsyncPolza
+
+polza = AsyncPolza()
+result = await polza.chat("anthropic/claude-haiku-5.5", messages)
+async for event in polza.chat_stream("anthropic/claude-haiku-5.5", messages):
+    ...
+```
+
 ### Catalog, balance, key
 
 ```python
@@ -71,6 +94,7 @@ All errors subclass `PolzaError` (`status`, `code`, `message`, `trace_id`, `meta
 | 503 | `ServerError` | yes, honors `Retry-After` |
 | connection failure | `PolzaConnectionError` | yes, backoff |
 | 200 with empty content | `EmptyResponseError` | no; carries `finish_reason`, `reasoning`, `usage`, `raw` |
+| error event inside a stream | `StreamError` | no |
 
 Polza doesn't charge for failed requests, so retrying is safe. Tune with `Polza(retry=RetryPolicy(max_retries=..., base_delay=..., max_wait=...))`.
 
@@ -89,7 +113,7 @@ Some models (e.g. `anthropic/claude-sonnet-5.5`) make thinking mandatory; `model
 ```bash
 uv sync
 uv run pytest                 # offline, against an in-process fake server; fails below 95% coverage
-POLZA_AI_API_KEY=... uv run pytest -m live --no-cov   # real API smoke tests, costs < 0.1 ₽
+POLZA_AI_API_KEY=... uv run pytest -m live --no-cov   # real API smoke tests, costs ~0.1 ₽
 uv run ruff check src tests && uv run mypy src
 ```
 

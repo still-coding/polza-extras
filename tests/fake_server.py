@@ -87,3 +87,6 @@ class FakeServer:
 
     def http_client(self) -> Any:
         return openai.DefaultHttpxClient(transport=_http.MockTransport(self._handle))
+
+    def async_http_client(self) -> Any:
+        return openai.DefaultAsyncHttpxClient(transport=_http.MockTransport(self._handle))

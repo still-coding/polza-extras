@@ -8,7 +8,7 @@ from ._models import (
     ReasoningInfo,
     Usage,
 )
-from .client import DEFAULT_BASE_URL, Polza
+from .client import DEFAULT_BASE_URL, AsyncPolza, Polza
 from .errors import (
     AuthError,
     EmptyResponseError,
@@ -26,6 +26,7 @@ from .retry import RetryPolicy
 
 __all__ = [
     "DEFAULT_BASE_URL",
+    "AsyncPolza",
     "AuthError",
     "Balance",
     "ChatResult",
