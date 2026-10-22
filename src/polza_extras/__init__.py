@@ -20,6 +20,7 @@ from .errors import (
     RateLimitError,
     RequestError,
     ServerError,
+    StreamError,
 )
 from .retry import RetryPolicy
 
@@ -44,5 +45,7 @@ __all__ = [
     "RequestError",
     "RetryPolicy",
     "ServerError",
+    "StreamError",
+    "StreamEvent",
     "Usage",
 ]

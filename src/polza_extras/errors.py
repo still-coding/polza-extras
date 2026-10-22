@@ -81,6 +81,13 @@ class PolzaConnectionError(PolzaError):
         super().__init__(0, message)
 
 
+class StreamError(PolzaError):
+    """An error event inside a 200 stream (Polza sends `error` + `finish_reason: "error"`).
+
+    Text received before it was already yielded; the request is not retried mid-stream.
+    """
+
+
 class EmptyResponseError(PolzaError):
     """A 2xx response without usable text: no choices, or empty content.
 

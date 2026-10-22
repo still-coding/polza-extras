@@ -16,7 +16,16 @@ ConnectError = _http.ConnectError
 
 
 def resp(status: int = 200, json: Any = None, headers: dict[str, str] | None = None) -> SimpleNamespace:
-    return SimpleNamespace(status=status, json=json, headers=headers or {})
+    return SimpleNamespace(status=status, json=json, headers=headers or {}, text=None)
+
+
+def sse(*events: Any, done: bool = True) -> SimpleNamespace:
+    """A 200 text/event-stream response with one `data:` line per event (dicts become JSON)."""
+    import json as _json
+    lines = [f"data: {e if isinstance(e, str) else _json.dumps(e, ensure_ascii=False)}\n\n" for e in events]
+    if done:
+        lines.append("data: [DONE]\n\n")
+    return SimpleNamespace(status=200, json=None, headers={"content-type": "text/event-stream"}, text="".join(lines))
 
 
 class Route:
@@ -27,6 +36,11 @@ class Route:
 
     def respond(self, status: int = 200, json: Any = None, headers: dict[str, str] | None = None) -> Route:
         self._default = resp(status, json, headers)
+        self.side_effect = None
+        return self
+
+    def stream(self, *events: Any, done: bool = True) -> Route:
+        self._default = sse(*events, done=done)
         self.side_effect = None
         return self
 
@@ -67,6 +81,8 @@ class FakeServer:
         item = route.next()
         if isinstance(item, Exception):
             raise item
+        if item.text is not None:
+            return _http.Response(item.status, content=item.text.encode(), headers=item.headers)
         return _http.Response(item.status, json=item.json, headers=item.headers)
 
     def http_client(self) -> Any:

@@ -25,6 +25,16 @@ class ChatResult(BaseModel):
     raw: dict[str, Any]
 
 
+class StreamEvent(BaseModel):
+    """One streamed chunk: a text delta, or the final chunk with usage and ruble cost."""
+
+    delta: str = ""
+    reasoning: str | None = None
+    finish_reason: str | None = None
+    usage: Usage | None = None
+    cost_rub: Decimal | None = None
+
+
 _MILLION = Decimal(1_000_000)
 
 

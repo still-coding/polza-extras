@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
-from ._models import ChatResult, Usage
+from ._models import ChatResult, StreamEvent, Usage
 from .errors import EmptyResponseError
 
 
@@ -54,4 +54,21 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
         provider=data.get("provider"),
         id=data.get("id"),
         raw=data,
+    )
+
+
+def parse_stream_chunk(data: dict[str, Any]) -> StreamEvent:
+    choices = data.get("choices") or []
+    delta = (choices[0].get("delta") or {}) if choices else {}
+    usage = data.get("usage")
+    return StreamEvent(
+        delta=delta.get("content") or "",
+        reasoning=delta.get("reasoning") or delta.get("reasoning_content") or None,
+        finish_reason=choices[0].get("finish_reason") if choices else None,
+        usage=Usage(
+            prompt_tokens=int(usage.get("prompt_tokens") or 0),
+            completion_tokens=int(usage.get("completion_tokens") or 0),
+            total_tokens=int(usage.get("total_tokens") or 0),
+        ) if usage else None,
+        cost_rub=_cost_rub(usage) if usage else None,
     )

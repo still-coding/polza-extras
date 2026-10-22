@@ -3,14 +3,14 @@ from __future__ import annotations
 import os
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any, TypeVar
 
 import openai
 
-from ._models import Balance, ChatResult, KeyInfo, ModelInfo, ModelPage
-from .chat import parse_chat
-from .errors import PolzaConnectionError, PolzaError, error_from_response
+from ._models import Balance, ChatResult, KeyInfo, ModelInfo, ModelPage, StreamEvent
+from .chat import parse_chat, parse_stream_chunk
+from .errors import PolzaConnectionError, PolzaError, StreamError, error_from_response
 from .retry import RetryPolicy
 
 DEFAULT_BASE_URL = "https://polza.ai/api/v1"
@@ -73,6 +73,50 @@ class Polza:
         json: bool = False,
         **extra: Any,
     ) -> ChatResult:
+        params = self._chat_params(model, messages, max_tokens, temperature, json, extra)
+
+        def call() -> dict[str, Any]:
+            raw = self.openai.chat.completions.with_raw_response.create(**params)
+            data: dict[str, Any] = raw.http_response.json()
+            return data
+
+        return parse_chat(self._with_retries(call), reasoning_fallback)
+
+    def chat_stream(
+        self,
+        model: str,
+        messages: list[dict[str, Any]],
+        max_tokens: int | None = None,
+        temperature: float | None = None,
+        json: bool = False,
+        **extra: Any,
+    ) -> Iterator[StreamEvent]:
+        """Stream a chat completion. The last event carries `usage` and `cost_rub`.
+
+        Errors before the first chunk are retried like `chat()`; an error event inside the stream
+        raises StreamError (text already yielded stays yielded).
+        """
+        params = self._chat_params(model, messages, max_tokens, temperature, json, extra)
+        params["stream"] = True
+        params["stream_options"] = {"include_usage": True}
+        stream = self._with_retries(lambda: self.openai.chat.completions.create(**params))
+        try:
+            for chunk in stream:
+                yield parse_stream_chunk(chunk.to_dict())
+        except openai.APIError as exc:
+            body = exc.body if isinstance(exc.body, dict) else {}
+            raise StreamError(200, str(body.get("message") or exc.message), code=body.get("code"),
+                              trace_id=body.get("trace_id"), metadata=body.get("metadata")) from exc
+
+    @staticmethod
+    def _chat_params(
+        model: str,
+        messages: list[dict[str, Any]],
+        max_tokens: int | None,
+        temperature: float | None,
+        json: bool,
+        extra: dict[str, Any],
+    ) -> dict[str, Any]:
         params: dict[str, Any] = {"model": model, "messages": messages}
         if max_tokens is not None:
             params["max_tokens"] = max_tokens
@@ -82,13 +126,7 @@ class Polza:
             extra.setdefault("response_format", {"type": "json_object"})
         if extra:
             params["extra_body"] = extra
-
-        def call() -> dict[str, Any]:
-            raw = self.openai.chat.completions.with_raw_response.create(**params)
-            data: dict[str, Any] = raw.http_response.json()
-            return data
-
-        return parse_chat(self._with_retries(call), reasoning_fallback)
+        return params
 
     # --- Polza-only endpoints ------------------------------------------------
 

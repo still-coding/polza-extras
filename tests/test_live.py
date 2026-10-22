@@ -55,3 +55,10 @@ def test_bad_key_raises_auth_error_with_trace_id():
     with pytest.raises(AuthError) as info:
         Polza(api_key="bad-key").balance()
     assert info.value.trace_id
+
+
+def test_stream_returns_text_and_final_ruble_cost(polza):
+    events = list(polza.chat_stream(CHEAP, [{"role": "user", "content": "Посчитай от одного до пяти словами"}],
+                                    max_tokens=60, reasoning={"type": "disabled"}))
+    assert "".join(e.delta for e in events).strip()
+    assert events[-1].cost_rub is not None and events[-1].cost_rub > 0
