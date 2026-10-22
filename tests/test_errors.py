@@ -80,3 +80,11 @@ def test_str_includes_status_code_and_trace_id():
     text = str(error_from_response(401, {"error": {"code": "UNAUTHORIZED", "message": "bad key"},
                                         "trace_id": "t1"}, {}))
     assert "401" in text and "UNAUTHORIZED" in text and "bad key" in text and "t1" in text
+
+
+def test_str_includes_provider_raw_reason_hidden_behind_a_generic_message():
+    body = {"error": {"code": "BAD_REQUEST", "message": "Некорректный запрос.",
+                      "metadata": {"raw": "Reasoning is mandatory for this endpoint and cannot be disabled."}},
+            "trace_id": "t2"}
+    text = str(error_from_response(400, body, {}))
+    assert "Некорректный запрос." in text and "Reasoning is mandatory" in text

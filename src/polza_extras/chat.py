@@ -24,25 +24,31 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
     finish_reason = choice.get("finish_reason")
     reasoning = message.get("reasoning") or message.get("reasoning_content") or None
     text = message.get("content") or ""
+    usage = data.get("usage") or {}
+    parsed_usage = Usage(
+        prompt_tokens=int(usage.get("prompt_tokens") or 0),
+        completion_tokens=int(usage.get("completion_tokens") or 0),
+        total_tokens=int(usage.get("total_tokens") or 0),
+    )
     if not text:
         if reasoning and reasoning_fallback:
             text = reasoning
         else:
+            hint = ""
+            if finish_reason == "length" and (reasoning or message.get("reasoning_details")):
+                hint = "; max_tokens was spent on thinking"
             raise EmptyResponseError(
-                f"Polza returned empty content (finish_reason={finish_reason})",
+                f"Polza returned empty content (finish_reason={finish_reason}{hint})",
                 finish_reason=finish_reason,
                 reasoning=reasoning,
+                usage=parsed_usage,
+                raw=data,
             )
-    usage = data.get("usage") or {}
     return ChatResult(
         text=text,
         reasoning=reasoning,
         finish_reason=finish_reason,
-        usage=Usage(
-            prompt_tokens=int(usage.get("prompt_tokens") or 0),
-            completion_tokens=int(usage.get("completion_tokens") or 0),
-            total_tokens=int(usage.get("total_tokens") or 0),
-        ),
+        usage=parsed_usage,
         cost_rub=_cost_rub(usage),
         model=data.get("model"),
         provider=data.get("provider"),

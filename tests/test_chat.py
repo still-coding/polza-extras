@@ -139,3 +139,16 @@ def test_no_response_format_by_default(polza, chat_route):
     chat_route.respond(200, json=completion())
     polza.chat(model="m", messages=MESSAGES)
     assert "response_format" not in json.loads(chat_route.last_request.content)
+
+
+def test_empty_content_from_hidden_thinking_keeps_usage_and_raw_response(polza, chat_route):
+    data = completion("", finish="length",
+                      usage={"prompt_tokens": 900, "completion_tokens": 1000, "total_tokens": 1900, "cost_rub": 0.3})
+    data["choices"][0]["message"]["reasoning_details"] = [{"type": "reasoning.text", "signature": "sig"}]
+    chat_route.respond(200, json=data)
+    with pytest.raises(EmptyResponseError) as info:
+        polza.chat(model="m", messages=MESSAGES, max_tokens=1000)
+    err = info.value
+    assert err.usage is not None and err.usage.completion_tokens == 1000
+    assert err.raw["choices"][0]["message"]["reasoning_details"]
+    assert "thinking" in str(err)

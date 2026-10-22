@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
+
+if TYPE_CHECKING:
+    from ._models import Usage
 
 
 class PolzaError(Exception):
@@ -31,6 +34,9 @@ class PolzaError(Exception):
         if self.code:
             parts.append(self.code)
         text = f"[{' '.join(parts)}] {self.message}"
+        raw = self.metadata.get("raw")
+        if raw and str(raw) not in self.message:
+            text += f": {raw}"
         if self.trace_id:
             text += f" (trace_id={self.trace_id})"
         return text
@@ -75,13 +81,23 @@ class EmptyResponseError(PolzaError):
     """A 2xx response without usable text: no choices, or empty content.
 
     `reasoning` carries the model's reasoning text, if any; with `finish_reason == "length"` it
-    usually means `max_tokens` was spent on thinking.
+    usually means `max_tokens` was spent on thinking. `usage` and `raw` (the response body) are
+    kept because the request is still billed.
     """
 
-    def __init__(self, message: str, finish_reason: str | None = None, reasoning: str | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        finish_reason: str | None = None,
+        reasoning: str | None = None,
+        usage: Usage | None = None,
+        raw: dict[str, Any] | None = None,
+    ) -> None:
         super().__init__(200, message)
         self.finish_reason = finish_reason
         self.reasoning = reasoning
+        self.usage = usage
+        self.raw = raw or {}
 
 
 _BY_STATUS: dict[int, type[PolzaError]] = {
