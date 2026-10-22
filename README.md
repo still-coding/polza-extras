@@ -88,8 +88,8 @@ Some models (e.g. `anthropic/claude-sonnet-5.5`) make thinking mandatory; `model
 
 ```bash
 uv sync
-uv run pytest                 # offline, against an in-process fake server
-POLZA_AI_API_KEY=... uv run pytest -m live   # real API smoke tests, costs < 0.1 ₽
+uv run pytest                 # offline, against an in-process fake server; fails below 95% coverage
+POLZA_AI_API_KEY=... uv run pytest -m live --no-cov   # real API smoke tests, costs < 0.1 ₽
 uv run ruff check src tests && uv run mypy src
 ```
 

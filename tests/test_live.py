@@ -1,4 +1,4 @@
-"""Smoke tests against the real Polza API: `POLZA_AI_API_KEY=... uv run pytest -m live`. Costs < 0.1 ₽."""
+"""Smoke tests against the real Polza API: `POLZA_AI_API_KEY=... uv run pytest -m live --no-cov`. Costs < 0.1 ₽."""
 import os
 from decimal import Decimal
 

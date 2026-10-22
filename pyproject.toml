@@ -12,7 +12,13 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8", "pytest-asyncio>=0.23", "ruff>=0.6", "mypy>=1.11"]
+dev = [
+    "pytest>=8",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest-cov>=7.1.0",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -25,7 +31,12 @@ packages = ["src/polza_extras"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 markers = ["live: hits the real Polza API (needs POLZA_AI_API_KEY)"]
-addopts = "-m 'not live'"
+# Coverage is gated: plain `uv run pytest` (and CI) fails below fail_under.
+# Live smoke tests cover little on purpose; run them with `--no-cov`.
+addopts = "-m 'not live' --cov=polza_extras --cov-branch --cov-report=term-missing:skip-covered"
+
+[tool.coverage.report]
+fail_under = 95
 
 [tool.ruff]
 line-length = 100
