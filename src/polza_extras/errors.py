@@ -70,6 +70,10 @@ class RequestError(PolzaError):
     """Other 4xx: bad request, not found, payload too large."""
 
 
+class NotFoundError(RequestError):
+    """404: unknown model or endpoint (a model id without the provider/ prefix is a 404 too)."""
+
+
 class PolzaConnectionError(PolzaError):
     """The request never got an HTTP response (DNS, connect, timeout)."""
 
@@ -104,6 +108,7 @@ _BY_STATUS: dict[int, type[PolzaError]] = {
     401: AuthError,
     402: InsufficientFundsError,
     403: ForbiddenError,
+    404: NotFoundError,
     408: ServerError,
 }
 

@@ -8,7 +8,7 @@ from typing import Any, TypeVar
 
 import openai
 
-from ._models import ChatResult
+from ._models import Balance, ChatResult, KeyInfo, ModelInfo, ModelPage
 from .chat import parse_chat
 from .errors import PolzaConnectionError, PolzaError, error_from_response
 from .retry import RetryPolicy
@@ -89,3 +89,54 @@ class Polza:
             return data
 
         return parse_chat(self._with_retries(call), reasoning_fallback)
+
+    # --- Polza-only endpoints ------------------------------------------------
+
+    def _get(self, path: str, params: dict[str, Any] | None = None, language: str | None = None) -> Any:
+        """GET a Polza endpoint through the SDK client, so errors and retries match chat()."""
+        headers = {"accept-language": language} if language else {}
+        query = {k: v for k, v in (params or {}).items() if v is not None}
+
+        def call() -> Any:
+            return self.openai.get(path, cast_to=object, options={"params": query, "headers": headers})
+
+        return self._with_retries(call)
+
+    def models(
+        self,
+        search: str | None = None,
+        type: str | None = None,
+        providers: list[str] | None = None,
+        page: int = 1,
+        limit: int | None = None,
+        language: str = "ru",
+        **filters: Any,
+    ) -> ModelPage:
+        """One page of /models/catalog. Extra filters (e.g. sortBy, contextLengthMin) pass through as is."""
+        data = self._get("/models/catalog", {
+            "search": search, "type": type, "providers": ",".join(providers) if providers else None,
+            "page": page, "limit": limit, **filters,
+        }, language)
+        meta = data.get("meta") or {}
+        return ModelPage(
+            items=[ModelInfo.from_api(m) for m in data.get("data") or []],
+            page=meta.get("page", page), limit=meta.get("limit", limit),
+            total=meta.get("total"), total_pages=meta.get("totalPages"),
+        )
+
+    def model(self, model_id: str, language: str = "ru") -> ModelInfo:
+        """Details of one model; raises NotFoundError for an unknown id."""
+        data = self._get(f"/models/{model_id}", language=language)
+        return ModelInfo.from_api(data.get("data", data))
+
+    def balance(self) -> Balance:
+        """Organization balance in rubles (GET /api/v2/balance)."""
+        v2 = self.base_url.rstrip("/").removesuffix("/v1") + "/v2/balance"
+        data = self._get(v2)
+        return Balance(amount=data["amount"], available=data["available"], reserved=data["reservedAmount"],
+                       spent=data["spentAmount"], updated_at=data.get("updatedAt"))
+
+    def key_info(self) -> KeyInfo:
+        """Limits and usage of the current API key (GET /v1/key)."""
+        data = self._get("/key")
+        return KeyInfo.model_validate(data.get("data", data))

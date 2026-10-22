@@ -4,6 +4,7 @@ from polza_extras.errors import (
     AuthError,
     ForbiddenError,
     InsufficientFundsError,
+    NotFoundError,
     PolzaError,
     RateLimitError,
     RequestError,
@@ -51,7 +52,7 @@ def test_rate_limit_without_retry_after_is_a_provider_limit():
         (502, ServerError),
         (503, ServerError),
         (400, RequestError),
-        (404, RequestError),
+        (404, NotFoundError),
         (413, RequestError),
     ],
 )
