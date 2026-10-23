@@ -5,7 +5,7 @@ import os
 import random
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
-from typing import Any, TypeVar
+from typing import Any, Self, TypeVar
 
 import openai
 
@@ -122,6 +122,16 @@ class Polza:
         self.openai = openai.OpenAI(base_url=base_url, api_key=_api_key(api_key), max_retries=0,
                                     http_client=self.http)
 
+    def close(self) -> None:
+        """Close the HTTP connections (also the http_client passed in)."""
+        self.openai.close()
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        self.close()
+
     def _with_retries(self, call: Callable[[], T]) -> T:
         attempt = 0
         while True:
@@ -175,6 +185,8 @@ class Polza:
                 yield parse_stream_chunk(chunk.to_dict())
         except openai.APIError as exc:
             raise _stream_error(exc) from exc
+        finally:
+            stream.close()  # also when the caller stops reading early
 
     # --- Polza-only endpoints ------------------------------------------------
 
@@ -232,6 +244,15 @@ class AsyncPolza:
         self.openai = openai.AsyncOpenAI(base_url=base_url, api_key=_api_key(api_key), max_retries=0,
                                          http_client=self.http)
 
+    async def close(self) -> None:
+        await self.openai.close()
+
+    async def __aenter__(self) -> Self:
+        return self
+
+    async def __aexit__(self, *exc: object) -> None:
+        await self.close()
+
     async def _with_retries(self, call: Callable[[], Awaitable[T]]) -> T:
         attempt = 0
         while True:
@@ -285,6 +306,8 @@ class AsyncPolza:
                 yield parse_stream_chunk(chunk.to_dict())
         except openai.APIError as exc:
             raise _stream_error(exc) from exc
+        finally:
+            await stream.close()
 
     async def _get(self, path: str, params: dict[str, Any] | None = None, language: str | None = None) -> Any:
         options = _get_options(params, language)

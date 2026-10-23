@@ -79,3 +79,17 @@ def test_missing_key_is_rejected(monkeypatch):
     monkeypatch.delenv("POLZA_AI_API_KEY", raising=False)
     with pytest.raises(ValueError, match="POLZA_AI_API_KEY"):
         AsyncPolza()
+
+
+async def test_async_stream_abandoned_early_releases_its_connection(apolza, chat_route):
+    chat_route.stream(chunk("раз"), chunk("два"), USAGE)
+    events = apolza.chat_stream("m", MESSAGES)
+    await anext(events)
+    await events.aclose()
+    assert chat_route.bodies[-1].closed
+
+
+async def test_async_client_is_a_context_manager_that_closes_its_connections(server):
+    async with AsyncPolza(api_key="k", http_client=server.async_http_client()) as polza:
+        assert not polza.http.is_closed
+    assert polza.http.is_closed

@@ -28,9 +28,30 @@ def sse(*events: Any, done: bool = True) -> SimpleNamespace:
     return SimpleNamespace(status=200, json=None, headers={"content-type": "text/event-stream"}, text="".join(lines))
 
 
+class TrackedBody(_http.SyncByteStream, _http.AsyncByteStream):
+    """A response body that remembers whether the client closed it (released the connection)."""
+
+    def __init__(self, data: bytes) -> None:
+        self.data = data
+        self.closed = False
+
+    def __iter__(self) -> Any:
+        yield self.data
+
+    async def __aiter__(self) -> Any:
+        yield self.data
+
+    def close(self) -> None:
+        self.closed = True
+
+    async def aclose(self) -> None:
+        self.closed = True
+
+
 class Route:
     def __init__(self) -> None:
         self.calls: list[Any] = []
+        self.bodies: list[TrackedBody] = []  # streamed bodies, to check they get closed
         self.side_effect: Any = None
         self._default = resp(200, {})
 
@@ -82,7 +103,9 @@ class FakeServer:
         if isinstance(item, Exception):
             raise item
         if item.text is not None:
-            return _http.Response(item.status, content=item.text.encode(), headers=item.headers)
+            body = TrackedBody(item.text.encode())
+            route.bodies.append(body)
+            return _http.Response(item.status, stream=body, headers=item.headers)
         return _http.Response(item.status, json=item.json, headers=item.headers)
 
     def http_client(self) -> Any:

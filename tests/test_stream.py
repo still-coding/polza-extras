@@ -73,3 +73,18 @@ def test_auth_error_before_streaming(polza, chat_route):
 def test_connection_error_before_streaming_is_retried(polza, chat_route, sleeps):
     chat_route.side_effect = [ConnectError("down"), sse(chunk("ок"), USAGE)]
     assert "".join(e.delta for e in polza.chat_stream("m", MESSAGES)) == "ок"
+
+
+def test_a_stream_abandoned_early_releases_its_connection(polza, chat_route):
+    chat_route.stream(chunk("раз"), chunk("два"), USAGE)
+    events = polza.chat_stream("m", MESSAGES)
+    next(events)
+    events.close()  # the caller stops reading, e.g. `break` out of the loop
+    assert chat_route.bodies[-1].closed
+
+
+def test_client_is_a_context_manager_that_closes_its_connections(server):
+    from polza_extras import Polza
+    with Polza(api_key="k", http_client=server.http_client()) as polza:
+        assert not polza.http.is_closed
+    assert polza.http.is_closed

@@ -38,6 +38,7 @@ print(result.text, result.cost_rub)       # 'Привет! …' Decimal('0.0123'
 data = polza.chat(model, messages, json=True)   # response_format={"type": "json_object"}
 
 polza.openai                               # the configured openai.OpenAI client, for anything else
+polza.close()                              # or: with Polza() as polza: ...
 ```
 
 ### Streaming
@@ -48,7 +49,7 @@ for event in polza.chat_stream("anthropic/claude-haiku-5.5", messages, max_token
 print(event.cost_rub)                        # the last event carries usage and cost
 ```
 
-Errors before the first chunk are retried like `chat()`. An error event inside the stream raises `StreamError`; text already yielded stays yielded, and the request is not retried.
+Errors before the first chunk are retried like `chat()`. An error event inside the stream raises `StreamError`; text already yielded stays yielded, and the request is not retried. Stopping early (`break`) closes the connection.
 
 ### Async
 
