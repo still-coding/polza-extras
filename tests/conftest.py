@@ -12,12 +12,22 @@ def completion(content="Привет!", reasoning=None, finish="stop", usage=Non
     if reasoning is not None:
         message["reasoning"] = reasoning
     return {
-        "id": "gen_1", "object": "chat.completion", "created": 1, "model": "openai/gpt-4o",
+        "id": "gen_1",
+        "object": "chat.completion",
+        "created": 1,
+        "model": "openai/gpt-4o",
         "provider": "openai-direct",
         "choices": [{"index": 0, "message": message, "finish_reason": finish}]
-        if choices is None else choices,
-        "usage": usage if usage is not None else
-        {"prompt_tokens": 10, "completion_tokens": 5, "total_tokens": 15, "cost_rub": 0.04131306},
+        if choices is None
+        else choices,
+        "usage": usage
+        if usage is not None
+        else {
+            "prompt_tokens": 10,
+            "completion_tokens": 5,
+            "total_tokens": 15,
+            "cost_rub": 0.04131306,
+        },
     }
 
 
@@ -49,4 +59,5 @@ def chat_route(server):
 def apolza(server, sleeps):
     async def sleep(seconds):
         sleeps.append(seconds)
+
     return AsyncPolza(api_key="test-key", sleep=sleep, http_client=server.async_http_client())

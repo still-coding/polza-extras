@@ -14,12 +14,23 @@ def chunk(content=None, reasoning=None, finish=None):
         delta["content"] = content
     if reasoning is not None:
         delta["reasoning"] = reasoning
-    return {"id": "gen_1", "object": "chat.completion.chunk", "created": 1, "model": "anthropic/claude-haiku-5.5",
-            "choices": [{"index": 0, "delta": delta, "finish_reason": finish}]}
+    return {
+        "id": "gen_1",
+        "object": "chat.completion.chunk",
+        "created": 1,
+        "model": "anthropic/claude-haiku-5.5",
+        "choices": [{"index": 0, "delta": delta, "finish_reason": finish}],
+    }
 
 
-USAGE = {"id": "gen_1", "object": "chat.completion.chunk", "created": 1, "model": "anthropic/claude-haiku-5.5",
-         "choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13, "cost_rub": 0.012}}
+USAGE = {
+    "id": "gen_1",
+    "object": "chat.completion.chunk",
+    "created": 1,
+    "model": "anthropic/claude-haiku-5.5",
+    "choices": [],
+    "usage": {"prompt_tokens": 10, "completion_tokens": 3, "total_tokens": 13, "cost_rub": 0.012},
+}
 
 
 def test_stream_yields_text_deltas_then_final_usage_and_cost(polza, chat_route):
@@ -47,9 +58,14 @@ def test_stream_exposes_reasoning_deltas_separately(polza, chat_route):
 
 
 def test_error_inside_the_stream_raises_stream_error_after_partial_text(polza, chat_route):
-    chat_route.stream(chunk("Нач"), {"error": {"code": "PROVIDER_ERROR", "message": "upstream died",
-                                               "trace_id": "t-9"},
-                                     "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}]}, done=False)
+    chat_route.stream(
+        chunk("Нач"),
+        {
+            "error": {"code": "PROVIDER_ERROR", "message": "upstream died", "trace_id": "t-9"},
+            "choices": [{"index": 0, "delta": {}, "finish_reason": "error"}],
+        },
+        done=False,
+    )
     received = []
     with pytest.raises(StreamError) as info:
         for event in polza.chat_stream("m", MESSAGES):
@@ -85,6 +101,13 @@ def test_a_stream_abandoned_early_releases_its_connection(polza, chat_route):
 
 def test_client_is_a_context_manager_that_closes_its_connections(server):
     from polza_extras import Polza
+
     with Polza(api_key="k", http_client=server.http_client()) as polza:
         assert not polza.http.is_closed
     assert polza.http.is_closed
+
+
+def test_every_name_in_all_is_importable():
+    import polza_extras
+
+    assert [n for n in polza_extras.__all__ if not hasattr(polza_extras, n)] == []

@@ -3,6 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import Any
 
+from ._json import arr, obj
 from ._models import ChatResult, StreamEvent, Usage
 from .errors import EmptyResponseError
 
@@ -15,21 +16,25 @@ def _cost_rub(usage: dict[str, Any]) -> Decimal | None:
     return None
 
 
-def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatResult:
-    choices = data.get("choices") or []
-    if not choices:
-        raise EmptyResponseError("Polza returned a response without choices")
-    choice = choices[0]
-    message = choice.get("message") or {}
-    finish_reason = choice.get("finish_reason")
-    reasoning = message.get("reasoning") or message.get("reasoning_content") or None
-    text = message.get("content") or ""
-    usage = data.get("usage") or {}
-    parsed_usage = Usage(
+def _usage(usage: dict[str, Any]) -> Usage:
+    return Usage(
         prompt_tokens=int(usage.get("prompt_tokens") or 0),
         completion_tokens=int(usage.get("completion_tokens") or 0),
         total_tokens=int(usage.get("total_tokens") or 0),
     )
+
+
+def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatResult:
+    choices = arr(data.get("choices"))
+    if not choices:
+        raise EmptyResponseError("Polza returned a response without choices")
+    choice = obj(choices[0])
+    message = obj(choice.get("message"))
+    finish_reason: str | None = choice.get("finish_reason")
+    reasoning: str | None = message.get("reasoning") or message.get("reasoning_content") or None
+    text: str = message.get("content") or ""
+    usage = obj(data.get("usage"))
+    parsed_usage = _usage(usage)
     if not text:
         if reasoning and reasoning_fallback:
             text = reasoning
@@ -59,17 +64,14 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
 
 
 def parse_stream_chunk(data: dict[str, Any]) -> StreamEvent:
-    choices = data.get("choices") or []
-    delta = (choices[0].get("delta") or {}) if choices else {}
-    usage = data.get("usage")
+    choices = arr(data.get("choices"))
+    choice = obj(choices[0]) if choices else {}
+    delta = obj(choice.get("delta"))
+    usage = obj(data.get("usage"))
     return StreamEvent(
         delta=delta.get("content") or "",
         reasoning=delta.get("reasoning") or delta.get("reasoning_content") or None,
-        finish_reason=choices[0].get("finish_reason") if choices else None,
-        usage=Usage(
-            prompt_tokens=int(usage.get("prompt_tokens") or 0),
-            completion_tokens=int(usage.get("completion_tokens") or 0),
-            total_tokens=int(usage.get("total_tokens") or 0),
-        ) if usage else None,
+        finish_reason=choice.get("finish_reason"),
+        usage=_usage(usage) if usage else None,
         cost_rub=_cost_rub(usage) if usage else None,
     )

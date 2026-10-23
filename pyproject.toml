@@ -16,8 +16,8 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.23",
     "ruff>=0.6",
-    "mypy>=1.11",
     "pytest-cov>=7.1.0",
+    "pyright>=1.1.414",
 ]
 
 [build-system]
@@ -38,9 +38,19 @@ addopts = "-m 'not live' --cov=polza_extras --cov-branch --cov-report=term-missi
 [tool.coverage.report]
 fail_under = 95
 
+# ruff replaces flake8 (E, W, F + bugbear B), isort (I) and black (`ruff format`).
 [tool.ruff]
 line-length = 100
 target-version = "py311"
+src = ["src", "tests"]
 
-[tool.mypy]
-strict = true
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "B", "UP", "C4", "SIM"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["polza_extras", "tests"]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.11"
+typeCheckingMode = "strict"

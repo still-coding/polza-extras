@@ -6,6 +6,8 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from ._json import obj
+
 
 class Usage(BaseModel):
     prompt_tokens: int = 0
@@ -48,13 +50,22 @@ class Pricing(BaseModel):
     input_cache_write_per_million: Decimal | None = None
     currency: str = "RUB"
 
-    def estimate(self, prompt_tokens: int, completion_tokens: int, cached_tokens: int = 0) -> Decimal:
-        """Approximate cost of one call; `cached_tokens` of the prompt are billed at the cache-read price."""
+    def estimate(
+        self, prompt_tokens: int, completion_tokens: int, cached_tokens: int = 0
+    ) -> Decimal:
+        """Approximate cost of one call; `cached_tokens` are billed at the cache-read price."""
         prompt = self.prompt_per_million or Decimal(0)
-        cache_read = self.input_cache_read_per_million if self.input_cache_read_per_million is not None else prompt
+        cache_read = (
+            self.input_cache_read_per_million
+            if self.input_cache_read_per_million is not None
+            else prompt
+        )
         completion = self.completion_per_million or Decimal(0)
-        total = (prompt * (prompt_tokens - cached_tokens) + cache_read * cached_tokens
-                 + completion * completion_tokens)
+        total = (
+            prompt * (prompt_tokens - cached_tokens)
+            + cache_read * cached_tokens
+            + completion * completion_tokens
+        )
         return total / _MILLION
 
 
@@ -80,10 +91,13 @@ class ModelInfo(BaseModel):
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> ModelInfo:
-        top = data.get("top_provider") or {}
+        top = obj(data.get("top_provider"))
         return cls(
-            id=data["id"], name=data.get("name") or "", type=data.get("type"),
-            context_length=data.get("context_length"), max_completion_tokens=data.get("max_completion_tokens"),
+            id=data["id"],
+            name=data.get("name") or "",
+            type=data.get("type"),
+            context_length=data.get("context_length"),
+            max_completion_tokens=data.get("max_completion_tokens"),
             reasoning=data.get("reasoning") or top.get("reasoning"),
             pricing=top.get("pricing") or data.get("pricing"),
             supported_parameters=top.get("supported_parameters") or [],

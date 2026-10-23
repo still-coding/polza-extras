@@ -1,6 +1,8 @@
 #!/bin/sh
 # Install: ln -sf ../../scripts/pre-commit .git/hooks/pre-commit
-# Blocks the commit when lint fails or test coverage drops below the gate in pyproject.toml.
+# Blocks the commit on lint, formatting or type errors, or when coverage drops below the gate.
 set -e
 uv run ruff check src tests
+uv run ruff format --check src tests
+uv run pyright
 uv run pytest -q

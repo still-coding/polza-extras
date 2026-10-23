@@ -9,6 +9,7 @@ from typing import Any, Self, TypeVar
 
 import openai
 
+from ._json import arr, obj
 from ._models import Balance, ChatResult, KeyInfo, ModelInfo, ModelPage, StreamEvent
 from .chat import parse_chat, parse_stream_chunk
 from .errors import PolzaConnectionError, PolzaError, StreamError, error_from_response
@@ -21,6 +22,7 @@ T = TypeVar("T")
 
 
 # --- shared, I/O-free pieces of Polza and AsyncPolza ---------------------------------------------
+
 
 def _api_key(api_key: str | None) -> str:
     key = api_key or os.environ.get(API_KEY_ENV)
@@ -41,9 +43,14 @@ def _translate(exc: openai.APIStatusError | openai.APIConnectionError) -> PolzaE
 
 
 def _stream_error(exc: openai.APIError) -> StreamError:
-    body = exc.body if isinstance(exc.body, dict) else {}
-    return StreamError(200, str(body.get("message") or exc.message), code=body.get("code"),
-                       trace_id=body.get("trace_id"), metadata=body.get("metadata"))
+    body = obj(exc.body)
+    return StreamError(
+        200,
+        str(body.get("message") or exc.message),
+        code=body.get("code"),
+        trace_id=body.get("trace_id"),
+        metadata=body.get("metadata"),
+    )
 
 
 def _chat_params(
@@ -70,23 +77,43 @@ def _chat_params(
     return params
 
 
-def _get_options(params: dict[str, Any] | None, language: str | None) -> Any:  # openai RequestOptions
+def _get_options(
+    params: dict[str, Any] | None, language: str | None
+) -> Any:  # openai RequestOptions
     headers = {"accept-language": language} if language else {}
-    return {"params": {k: v for k, v in (params or {}).items() if v is not None}, "headers": headers}
+    return {
+        "params": {k: v for k, v in (params or {}).items() if v is not None},
+        "headers": headers,
+    }
 
 
-def _catalog_query(search: str | None, type: str | None, providers: list[str] | None, page: int,
-                   limit: int | None, filters: dict[str, Any]) -> dict[str, Any]:
-    return {"search": search, "type": type, "providers": ",".join(providers) if providers else None,
-            "page": page, "limit": limit, **filters}
+def _catalog_query(
+    search: str | None,
+    type: str | None,
+    providers: list[str] | None,
+    page: int,
+    limit: int | None,
+    filters: dict[str, Any],
+) -> dict[str, Any]:
+    return {
+        "search": search,
+        "type": type,
+        "providers": ",".join(providers) if providers else None,
+        "page": page,
+        "limit": limit,
+        **filters,
+    }
 
 
 def _parse_page(data: Any, page: int, limit: int | None) -> ModelPage:
-    meta = data.get("meta") or {}
+    data = obj(data)
+    meta = obj(data.get("meta"))
     return ModelPage(
-        items=[ModelInfo.from_api(m) for m in data.get("data") or []],
-        page=meta.get("page", page), limit=meta.get("limit", limit),
-        total=meta.get("total"), total_pages=meta.get("totalPages"),
+        items=[ModelInfo.from_api(obj(m)) for m in arr(data.get("data"))],
+        page=meta.get("page", page),
+        limit=meta.get("limit", limit),
+        total=meta.get("total"),
+        total_pages=meta.get("totalPages"),
     )
 
 
@@ -95,8 +122,13 @@ def _balance_url(base_url: str) -> str:
 
 
 def _parse_balance(data: Any) -> Balance:
-    return Balance(amount=data["amount"], available=data["available"], reserved=data["reservedAmount"],
-                   spent=data["spentAmount"], updated_at=data.get("updatedAt"))
+    return Balance(
+        amount=data["amount"],
+        available=data["available"],
+        reserved=data["reservedAmount"],
+        spent=data["spentAmount"],
+        updated_at=data.get("updatedAt"),
+    )
 
 
 class Polza:
@@ -119,8 +151,11 @@ class Polza:
         # version) so errors are translated correctly; the Polza-only endpoints reuse it.
         self.http: Any = http_client or openai.DefaultHttpxClient(timeout=timeout)
         # SDK retries are off: Polza has its own retry rules (see RetryPolicy).
-        self.openai = openai.OpenAI(base_url=base_url, api_key=_api_key(api_key), max_retries=0,
-                                    http_client=self.http)
+        self.openai = openai.OpenAI(
+            base_url=base_url, api_key=_api_key(api_key), max_retries=0, http_client=self.http
+        )
+        # Typed as Any: create(**params) cannot be matched against the SDK's overloads.
+        self._completions: Any = self.openai.chat.completions
 
     def close(self) -> None:
         """Close the HTTP connections (also the http_client passed in)."""
@@ -158,7 +193,7 @@ class Polza:
         params = _chat_params(model, messages, max_tokens, temperature, json, extra)
 
         def call() -> dict[str, Any]:
-            raw = self.openai.chat.completions.with_raw_response.create(**params)
+            raw = self._completions.with_raw_response.create(**params)
             data: dict[str, Any] = raw.http_response.json()
             return data
 
@@ -179,7 +214,7 @@ class Polza:
         raises StreamError (text already yielded stays yielded).
         """
         params = _chat_params(model, messages, max_tokens, temperature, json, extra, stream=True)
-        stream = self._with_retries(lambda: self.openai.chat.completions.create(**params))
+        stream = self._with_retries(lambda: self._completions.create(**params))
         try:
             for chunk in stream:
                 yield parse_stream_chunk(chunk.to_dict())
@@ -190,7 +225,9 @@ class Polza:
 
     # --- Polza-only endpoints ------------------------------------------------
 
-    def _get(self, path: str, params: dict[str, Any] | None = None, language: str | None = None) -> Any:
+    def _get(
+        self, path: str, params: dict[str, Any] | None = None, language: str | None = None
+    ) -> Any:
         """GET a Polza endpoint through the SDK client, so errors and retries match chat()."""
         options = _get_options(params, language)
         return self._with_retries(lambda: self.openai.get(path, cast_to=object, options=options))
@@ -205,8 +242,12 @@ class Polza:
         language: str = "ru",
         **filters: Any,
     ) -> ModelPage:
-        """One page of /models/catalog. Extra filters (e.g. sortBy, contextLengthMin) pass through as is."""
-        data = self._get("/models/catalog", _catalog_query(search, type, providers, page, limit, filters), language)
+        """One page of /models/catalog. Extra filters (e.g. sortBy, contextLengthMin) pass as is."""
+        data = self._get(
+            "/models/catalog",
+            _catalog_query(search, type, providers, page, limit, filters),
+            language,
+        )
         return _parse_page(data, page, limit)
 
     def model(self, model_id: str, language: str = "ru") -> ModelInfo:
@@ -241,8 +282,11 @@ class AsyncPolza:
         self._sleep = sleep
         self._rng = random.Random()
         self.http: Any = http_client or openai.DefaultAsyncHttpxClient(timeout=timeout)
-        self.openai = openai.AsyncOpenAI(base_url=base_url, api_key=_api_key(api_key), max_retries=0,
-                                         http_client=self.http)
+        self.openai = openai.AsyncOpenAI(
+            base_url=base_url, api_key=_api_key(api_key), max_retries=0, http_client=self.http
+        )
+        # Typed as Any: create(**params) cannot be matched against the SDK's overloads.
+        self._completions: Any = self.openai.chat.completions
 
     async def close(self) -> None:
         await self.openai.close()
@@ -279,7 +323,7 @@ class AsyncPolza:
         params = _chat_params(model, messages, max_tokens, temperature, json, extra)
 
         async def call() -> dict[str, Any]:
-            raw = await self.openai.chat.completions.with_raw_response.create(**params)
+            raw = await self._completions.with_raw_response.create(**params)
             data: dict[str, Any] = raw.http_response.json()
             return data
 
@@ -298,7 +342,7 @@ class AsyncPolza:
         params = _chat_params(model, messages, max_tokens, temperature, json, extra, stream=True)
 
         async def call() -> Any:
-            return await self.openai.chat.completions.create(**params)
+            return await self._completions.create(**params)
 
         stream = await self._with_retries(call)
         try:
@@ -309,7 +353,9 @@ class AsyncPolza:
         finally:
             await stream.close()
 
-    async def _get(self, path: str, params: dict[str, Any] | None = None, language: str | None = None) -> Any:
+    async def _get(
+        self, path: str, params: dict[str, Any] | None = None, language: str | None = None
+    ) -> Any:
         options = _get_options(params, language)
 
         async def call() -> Any:

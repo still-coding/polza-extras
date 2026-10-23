@@ -1,4 +1,8 @@
-"""Smoke tests against the real Polza API: `POLZA_AI_API_KEY=... uv run pytest -m live --no-cov`. Costs < 0.1 ₽."""
+"""Smoke tests against the real Polza API. Costs < 0.1 ₽.
+
+Run: `POLZA_AI_API_KEY=... uv run pytest -m live --no-cov`
+"""
+
 import os
 from decimal import Decimal
 
@@ -19,17 +23,29 @@ def polza():
 
 
 def test_chat_returns_text_and_ruble_cost(polza):
-    result = polza.chat(CHEAP, [{"role": "user", "content": "Ответь одним словом: привет"}],
-                        max_tokens=50, reasoning={"type": "disabled"})
+    result = polza.chat(
+        CHEAP,
+        [{"role": "user", "content": "Ответь одним словом: привет"}],
+        max_tokens=50,
+        reasoning={"type": "disabled"},
+    )
     assert result.text.strip()
     assert result.cost_rub is not None and result.cost_rub > 0
 
 
 def test_json_mode_returns_parseable_json(polza):
     import json
-    result = polza.chat(CHEAP, [{"role": "system", "content": 'Верни JSON {"ok": true}'},
-                                {"role": "user", "content": "давай"}],
-                        max_tokens=50, json=True, reasoning={"type": "disabled"})
+
+    result = polza.chat(
+        CHEAP,
+        [
+            {"role": "system", "content": 'Верни JSON {"ok": true}'},
+            {"role": "user", "content": "давай"},
+        ],
+        max_tokens=50,
+        json=True,
+        reasoning={"type": "disabled"},
+    )
     text = result.text.strip().removeprefix("```json").removesuffix("```")
     assert json.loads(text)["ok"] is True
 
@@ -58,18 +74,36 @@ def test_bad_key_raises_auth_error_with_trace_id():
 
 
 def test_stream_returns_text_and_final_ruble_cost(polza):
-    events = list(polza.chat_stream(CHEAP, [{"role": "user", "content": "Посчитай от одного до пяти словами"}],
-                                    max_tokens=60, reasoning={"type": "disabled"}))
+    events = list(
+        polza.chat_stream(
+            CHEAP,
+            [{"role": "user", "content": "Посчитай от одного до пяти словами"}],
+            max_tokens=60,
+            reasoning={"type": "disabled"},
+        )
+    )
     assert "".join(e.delta for e in events).strip()
     assert events[-1].cost_rub is not None and events[-1].cost_rub > 0
 
 
 async def test_async_chat_and_stream():
     from polza_extras import AsyncPolza
+
     apolza = AsyncPolza()
-    result = await apolza.chat(CHEAP, [{"role": "user", "content": "Скажи «ок»"}], max_tokens=20,
-                               reasoning={"type": "disabled"})
+    result = await apolza.chat(
+        CHEAP,
+        [{"role": "user", "content": "Скажи «ок»"}],
+        max_tokens=20,
+        reasoning={"type": "disabled"},
+    )
     assert result.text.strip() and result.cost_rub
-    events = [e async for e in apolza.chat_stream(CHEAP, [{"role": "user", "content": "Скажи «ок»"}],
-                                                  max_tokens=20, reasoning={"type": "disabled"})]
+    events = [
+        e
+        async for e in apolza.chat_stream(
+            CHEAP,
+            [{"role": "user", "content": "Скажи «ок»"}],
+            max_tokens=20,
+            reasoning={"type": "disabled"},
+        )
+    ]
     assert events[-1].cost_rub

@@ -13,14 +13,20 @@ def test_returns_text_usage_and_ruble_cost(polza, chat_route):
     result = polza.chat(model="openai/gpt-4o", messages=MESSAGES)
     assert result.text == "Здравствуй"
     assert result.finish_reason == "stop"
-    assert (result.usage.prompt_tokens, result.usage.completion_tokens, result.usage.total_tokens) == (10, 5, 15)
+    assert (
+        result.usage.prompt_tokens,
+        result.usage.completion_tokens,
+        result.usage.total_tokens,
+    ) == (10, 5, 15)
     assert result.cost_rub == Decimal("0.04131306")
     assert result.model == "openai/gpt-4o" and result.provider == "openai-direct"
 
 
 def test_sends_auth_model_and_messages_to_the_polza_base_url(polza, chat_route):
     chat_route.respond(200, json=completion())
-    polza.chat(model="anthropic/claude-sonnet-4.6", messages=MESSAGES, max_tokens=50, temperature=0.3)
+    polza.chat(
+        model="anthropic/claude-sonnet-4.6", messages=MESSAGES, max_tokens=50, temperature=0.3
+    )
     request = chat_route.last_request
     sent = json.loads(request.content)
     assert request.headers["authorization"] == "Bearer test-key"
@@ -29,11 +35,16 @@ def test_sends_auth_model_and_messages_to_the_polza_base_url(polza, chat_route):
 
 
 def test_cost_falls_back_to_cost_alias_and_is_none_when_absent(polza, chat_route):
-    chat_route.respond(200, json=completion(usage={"prompt_tokens": 1, "completion_tokens": 1,
-                                                   "total_tokens": 2, "cost": 1.5}))
+    chat_route.respond(
+        200,
+        json=completion(
+            usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2, "cost": 1.5}
+        ),
+    )
     assert polza.chat(model="m", messages=MESSAGES).cost_rub == Decimal("1.5")
-    chat_route.respond(200, json=completion(usage={"prompt_tokens": 1, "completion_tokens": 1,
-                                                   "total_tokens": 2}))
+    chat_route.respond(
+        200, json=completion(usage={"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2})
+    )
     assert polza.chat(model="m", messages=MESSAGES).cost_rub is None
 
 
@@ -115,6 +126,7 @@ def test_402_insufficient_funds_raises_immediately(polza, chat_route):
 
 def test_connection_failure_is_retried_then_raised_as_polza_error(polza, chat_route, sleeps):
     from polza_extras import PolzaConnectionError
+
     chat_route.side_effect = ConnectError("boom")
     with pytest.raises(PolzaConnectionError):
         polza.chat(model="m", messages=MESSAGES)
@@ -129,8 +141,14 @@ def test_json_flag_requests_json_object_format(polza, chat_route):
 
 def test_explicit_response_format_schema_is_passed_through(polza, chat_route):
     chat_route.respond(200, json=completion('{"name": "x"}'))
-    fmt = {"type": "json_schema", "json_schema": {"name": "p", "strict": True,
-                                                  "schema": {"type": "object", "properties": {}}}}
+    fmt = {
+        "type": "json_schema",
+        "json_schema": {
+            "name": "p",
+            "strict": True,
+            "schema": {"type": "object", "properties": {}},
+        },
+    }
     polza.chat(model="m", messages=MESSAGES, response_format=fmt)
     assert json.loads(chat_route.last_request.content)["response_format"] == fmt
 
@@ -142,9 +160,19 @@ def test_no_response_format_by_default(polza, chat_route):
 
 
 def test_empty_content_from_hidden_thinking_keeps_usage_and_raw_response(polza, chat_route):
-    data = completion("", finish="length",
-                      usage={"prompt_tokens": 900, "completion_tokens": 1000, "total_tokens": 1900, "cost_rub": 0.3})
-    data["choices"][0]["message"]["reasoning_details"] = [{"type": "reasoning.text", "signature": "sig"}]
+    data = completion(
+        "",
+        finish="length",
+        usage={
+            "prompt_tokens": 900,
+            "completion_tokens": 1000,
+            "total_tokens": 1900,
+            "cost_rub": 0.3,
+        },
+    )
+    data["choices"][0]["message"]["reasoning_details"] = [
+        {"type": "reasoning.text", "signature": "sig"}
+    ]
     chat_route.respond(200, json=data)
     with pytest.raises(EmptyResponseError) as info:
         polza.chat(model="m", messages=MESSAGES, max_tokens=1000)

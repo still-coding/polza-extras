@@ -3,6 +3,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
+from ._json import obj
+
 if TYPE_CHECKING:
     from decimal import Decimal
 
@@ -57,7 +59,7 @@ class ForbiddenError(PolzaError):
 
 
 class RateLimitError(PolzaError):
-    """429. `scope` is "own" for Polza's per-organization limit (has Retry-After), else "provider"."""
+    """429. `scope` is "own" for Polza's per-organization limit (has Retry-After), or "provider"."""
 
     @property
     def scope(self) -> Literal["own", "provider"]:
@@ -140,9 +142,8 @@ def _retry_after(headers: Mapping[str, str]) -> float | None:
 
 
 def error_from_response(status: int, body: Any, headers: Mapping[str, str]) -> PolzaError:
-    error = body.get("error") if isinstance(body, dict) else None
-    error = error if isinstance(error, dict) else {}
-    top_trace = body.get("trace_id") if isinstance(body, dict) else None
+    error = obj(obj(body).get("error"))
+    top_trace = obj(body).get("trace_id")
     kwargs: dict[str, Any] = {
         "message": str(error.get("message") or f"Polza API returned HTTP {status}"),
         "code": error.get("code"),

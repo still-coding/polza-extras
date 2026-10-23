@@ -1,4 +1,5 @@
 """AsyncPolza mirrors Polza; these check each method once plus retries and stream errors."""
+
 from decimal import Decimal
 
 import pytest
@@ -46,13 +47,18 @@ async def test_stream_yields_deltas_and_final_cost(apolza, chat_route):
 
 
 async def test_stream_error_event_raises(apolza, chat_route):
-    chat_route.stream(chunk("Нач"), {"error": {"code": "PROVIDER_ERROR", "message": "died"}}, done=False)
+    chat_route.stream(
+        chunk("Нач"), {"error": {"code": "PROVIDER_ERROR", "message": "died"}}, done=False
+    )
     with pytest.raises(StreamError):
         _ = [e async for e in apolza.chat_stream("m", MESSAGES)]
 
 
 async def test_stream_retries_before_the_first_chunk(apolza, chat_route, sleeps):
-    chat_route.side_effect = [resp(503, error_body("UNAVAILABLE"), {"Retry-After": "1"}), sse(chunk("ок"), USAGE)]
+    chat_route.side_effect = [
+        resp(503, error_body("UNAVAILABLE"), {"Retry-After": "1"}),
+        sse(chunk("ок"), USAGE),
+    ]
     assert "".join([e.delta async for e in apolza.chat_stream("m", MESSAGES)]) == "ок"
     assert sleeps == [1.0]
 
@@ -60,8 +66,16 @@ async def test_stream_retries_before_the_first_chunk(apolza, chat_route, sleeps)
 async def test_catalog_balance_and_key(apolza, server):
     server.get(f"{BASE}/models/catalog").respond(200, json={"data": [HAIKU], "meta": {"total": 1}})
     server.get(f"{BASE}/models/{HAIKU['id']}").respond(200, json=HAIKU)
-    server.get("https://polza.ai/api/v2/balance").respond(200, json={
-        "amount": "10", "available": "9", "reservedAmount": "1", "spentAmount": "5", "updatedAt": None})
+    server.get("https://polza.ai/api/v2/balance").respond(
+        200,
+        json={
+            "amount": "10",
+            "available": "9",
+            "reservedAmount": "1",
+            "spentAmount": "5",
+            "updatedAt": None,
+        },
+    )
     server.get(f"{BASE}/key").respond(200, json={"label": "k", "usage": 1.5})
     assert [m.id for m in (await apolza.models(search="claude")).items] == [HAIKU["id"]]
     assert (await apolza.model(HAIKU["id"])).pricing.prompt_per_million == Decimal("11.70364000")

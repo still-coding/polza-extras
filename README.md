@@ -115,7 +115,8 @@ Some models (e.g. `anthropic/claude-sonnet-5.5`) make thinking mandatory; `model
 uv sync
 uv run pytest                 # offline, against an in-process fake server; fails below 95% coverage
 POLZA_AI_API_KEY=... uv run pytest -m live --no-cov   # real API smoke tests, costs ~0.1 ₽
-uv run ruff check src tests && uv run mypy src
+uv run ruff check src tests && uv run ruff format --check src tests && uv run pyright
+ln -sf ../../scripts/pre-commit .git/hooks/pre-commit   # all of the above before each commit
 ```
 
 ## License

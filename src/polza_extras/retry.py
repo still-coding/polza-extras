@@ -26,7 +26,9 @@ class RetryPolicy:
     retry_402: bool = False
     retry_402_attempts: int = 2
 
-    def delay_for(self, error: PolzaError, attempt: int, rng: random.Random | None = None) -> float | None:
+    def delay_for(
+        self, error: PolzaError, attempt: int, rng: random.Random | None = None
+    ) -> float | None:
         """Seconds to sleep before retry number `attempt` (0-based), or None to give up."""
         if attempt >= self.max_retries:
             return None

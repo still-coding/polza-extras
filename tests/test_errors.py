@@ -28,7 +28,11 @@ def test_parses_polza_error_body_fields():
     assert isinstance(err, RateLimitError)
     assert (err.status, err.code, err.trace_id) == (429, "TOO_MANY_REQUESTS", "abc-123")
     assert err.message.startswith("Слишком много")
-    assert err.metadata == {"provider_name": "alibaba", "raw": "slow down", "reason": "providerRateLimit"}
+    assert err.metadata == {
+        "provider_name": "alibaba",
+        "raw": "slow down",
+        "reason": "providerRateLimit",
+    }
 
 
 def test_rate_limit_with_retry_after_is_our_own_limit():
@@ -57,7 +61,9 @@ def test_rate_limit_without_retry_after_is_a_provider_limit():
     ],
 )
 def test_status_maps_to_error_class(status, expected):
-    assert type(error_from_response(status, {"error": {"code": "X", "message": "m"}}, {})) is expected
+    assert (
+        type(error_from_response(status, {"error": {"code": "X", "message": "m"}}, {})) is expected
+    )
 
 
 def test_all_errors_share_a_base_class():
@@ -73,19 +79,29 @@ def test_missing_or_non_json_body_still_produces_an_error():
 
 
 def test_top_level_trace_id_is_used_when_error_has_none():
-    err = error_from_response(400, {"error": {"code": "BAD_REQUEST", "message": "x"}, "trace_id": "top"}, {})
+    err = error_from_response(
+        400, {"error": {"code": "BAD_REQUEST", "message": "x"}, "trace_id": "top"}, {}
+    )
     assert err.trace_id == "top"
 
 
 def test_str_includes_status_code_and_trace_id():
-    text = str(error_from_response(401, {"error": {"code": "UNAUTHORIZED", "message": "bad key"},
-                                        "trace_id": "t1"}, {}))
+    text = str(
+        error_from_response(
+            401, {"error": {"code": "UNAUTHORIZED", "message": "bad key"}, "trace_id": "t1"}, {}
+        )
+    )
     assert "401" in text and "UNAUTHORIZED" in text and "bad key" in text and "t1" in text
 
 
 def test_str_includes_provider_raw_reason_hidden_behind_a_generic_message():
-    body = {"error": {"code": "BAD_REQUEST", "message": "Некорректный запрос.",
-                      "metadata": {"raw": "Reasoning is mandatory for this endpoint and cannot be disabled."}},
-            "trace_id": "t2"}
+    body = {
+        "error": {
+            "code": "BAD_REQUEST",
+            "message": "Некорректный запрос.",
+            "metadata": {"raw": "Reasoning is mandatory for this endpoint and cannot be disabled."},
+        },
+        "trace_id": "t2",
+    }
     text = str(error_from_response(400, body, {}))
     assert "Некорректный запрос." in text and "Reasoning is mandatory" in text

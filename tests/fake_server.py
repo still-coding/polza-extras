@@ -3,6 +3,7 @@
 The OpenAI SDK picks its own httpx flavor (httpx, or a vendored httpx2 in newer releases), so we
 build the mock transport from whichever module the SDK's default client comes from.
 """
+
 from __future__ import annotations
 
 import importlib
@@ -15,17 +16,25 @@ _http = importlib.import_module(openai.DefaultHttpxClient.__mro__[1].__module__.
 ConnectError = _http.ConnectError
 
 
-def resp(status: int = 200, json: Any = None, headers: dict[str, str] | None = None) -> SimpleNamespace:
+def resp(
+    status: int = 200, json: Any = None, headers: dict[str, str] | None = None
+) -> SimpleNamespace:
     return SimpleNamespace(status=status, json=json, headers=headers or {}, text=None)
 
 
 def sse(*events: Any, done: bool = True) -> SimpleNamespace:
     """A 200 text/event-stream response with one `data:` line per event (dicts become JSON)."""
     import json as _json
-    lines = [f"data: {e if isinstance(e, str) else _json.dumps(e, ensure_ascii=False)}\n\n" for e in events]
+
+    lines = [
+        f"data: {e if isinstance(e, str) else _json.dumps(e, ensure_ascii=False)}\n\n"
+        for e in events
+    ]
     if done:
         lines.append("data: [DONE]\n\n")
-    return SimpleNamespace(status=200, json=None, headers={"content-type": "text/event-stream"}, text="".join(lines))
+    return SimpleNamespace(
+        status=200, json=None, headers={"content-type": "text/event-stream"}, text="".join(lines)
+    )
 
 
 class TrackedBody(_http.SyncByteStream, _http.AsyncByteStream):
@@ -55,7 +64,9 @@ class Route:
         self.side_effect: Any = None
         self._default = resp(200, {})
 
-    def respond(self, status: int = 200, json: Any = None, headers: dict[str, str] | None = None) -> Route:
+    def respond(
+        self, status: int = 200, json: Any = None, headers: dict[str, str] | None = None
+    ) -> Route:
         self._default = resp(status, json, headers)
         self.side_effect = None
         return self
@@ -97,7 +108,9 @@ class FakeServer:
     def _handle(self, request: Any) -> Any:
         route = self.routes.get((request.method, str(request.url).split("?")[0]))
         if route is None:
-            return _http.Response(404, json={"error": {"code": "NOT_FOUND", "message": "no fake route"}})
+            return _http.Response(
+                404, json={"error": {"code": "NOT_FOUND", "message": "no fake route"}}
+            )
         route.calls.append(request)
         item = route.next()
         if isinstance(item, Exception):
