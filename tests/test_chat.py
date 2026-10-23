@@ -152,3 +152,4 @@ def test_empty_content_from_hidden_thinking_keeps_usage_and_raw_response(polza, 
     assert err.usage is not None and err.usage.completion_tokens == 1000
     assert err.raw["choices"][0]["message"]["reasoning_details"]
     assert "thinking" in str(err)
+    assert err.cost_rub == Decimal("0.3")  # the failed call is still billed

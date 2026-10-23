@@ -4,6 +4,8 @@ from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, Literal
 
 if TYPE_CHECKING:
+    from decimal import Decimal
+
     from ._models import Usage
 
 
@@ -103,12 +105,14 @@ class EmptyResponseError(PolzaError):
         reasoning: str | None = None,
         usage: Usage | None = None,
         raw: dict[str, Any] | None = None,
+        cost_rub: Decimal | None = None,
     ) -> None:
         super().__init__(200, message)
         self.finish_reason = finish_reason
         self.reasoning = reasoning
         self.usage = usage
         self.raw = raw or {}
+        self.cost_rub = cost_rub  # what the failed call was billed
 
 
 _BY_STATUS: dict[int, type[PolzaError]] = {

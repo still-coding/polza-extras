@@ -43,6 +43,7 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
                 reasoning=reasoning,
                 usage=parsed_usage,
                 raw=data,
+                cost_rub=_cost_rub(usage),
             )
     return ChatResult(
         text=text,

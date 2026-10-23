@@ -94,7 +94,7 @@ All errors subclass `PolzaError` (`status`, `code`, `message`, `trace_id`, `meta
 | 408, 502 | `ServerError` | yes, backoff |
 | 503 | `ServerError` | yes, honors `Retry-After` |
 | connection failure | `PolzaConnectionError` | yes, backoff |
-| 200 with empty content | `EmptyResponseError` | no; carries `finish_reason`, `reasoning`, `usage`, `raw` |
+| 200 with empty content | `EmptyResponseError` | no; carries `finish_reason`, `reasoning`, `usage`, `cost_rub` (still billed), `raw` |
 | error event inside a stream | `StreamError` | no |
 
 Polza doesn't charge for failed requests, so retrying is safe. Tune with `Polza(retry=RetryPolicy(max_retries=..., base_delay=..., max_wait=...))`.
