@@ -1,5 +1,10 @@
 # polza-extras
 
+[![PyPI](https://img.shields.io/pypi/v/polza-extras)](https://pypi.org/project/polza-extras/)
+[![Python](https://img.shields.io/pypi/pyversions/polza-extras)](https://pypi.org/project/polza-extras/)
+[![CI](https://github.com/still-coding/polza-extras/actions/workflows/ci.yml/badge.svg)](https://github.com/still-coding/polza-extras/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/pypi/l/polza-extras)](https://github.com/still-coding/polza-extras/blob/main/LICENSE)
+
 Small helpers for [Polza.ai](https://polza.ai) on top of the official `openai` SDK.
 
 Polza is OpenAI-compatible, so for chat you can use the `openai` SDK directly. This library covers what the SDK doesn't know about:

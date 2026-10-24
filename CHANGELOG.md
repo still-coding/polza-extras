@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.1 — 2026-10-24
+
+Discoverability only, no code changes.
+
+- PyPI metadata: more keywords and classifiers, `Documentation` and `Source` links.
+- README badges.
+- Release workflow also creates a GitHub Release from this changelog.
+
 ## 0.2.0 — 2026-10-24
 
 First release on PyPI: `uv add polza-extras`.

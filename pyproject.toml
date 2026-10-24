@@ -1,21 +1,30 @@
 [project]
 name = "polza-extras"
-version = "0.2.0"
+version = "0.2.1"
 description = "Polza.ai helpers on top of the OpenAI SDK: ruble cost, typed errors, retry rules, model catalog, balance"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.11"
 authors = [{ name = "still-coding" }]
-keywords = ["polza", "polza.ai", "openai", "llm", "russia", "rubles"]
+keywords = [
+    "polza", "polza.ai", "openai", "openai-compatible", "llm", "llm-client",
+    "russia", "rubles", "ruble", "cost-tracking", "retry", "structured-output",
+    "tool-calling", "streaming", "польза", "нейросети",
+]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
+    "Natural Language :: English",
+    "Natural Language :: Russian",
+    "Operating System :: OS Independent",
+    "Framework :: AsyncIO",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Software Development :: Libraries :: Python Modules",
     "Typing :: Typed",
 ]
 dependencies = [
@@ -39,6 +48,8 @@ build-backend = "hatchling.build"
 
 [project.urls]
 Homepage = "https://github.com/still-coding/polza-extras"
+Documentation = "https://github.com/still-coding/polza-extras#readme"
+Source = "https://github.com/still-coding/polza-extras"
 Issues = "https://github.com/still-coding/polza-extras/issues"
 Changelog = "https://github.com/still-coding/polza-extras/blob/main/CHANGELOG.md"
 
