@@ -181,3 +181,37 @@ def test_empty_content_from_hidden_thinking_keeps_usage_and_raw_response(polza, 
     assert err.raw["choices"][0]["message"]["reasoning_details"]
     assert "thinking" in str(err)
     assert err.cost_rub == Decimal("0.3")  # the failed call is still billed
+
+
+def tool_call_reply():
+    data = completion(None, finish="tool_calls")
+    data["choices"][0]["message"]["tool_calls"] = [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {"name": "get_weather", "arguments": '{"city": "Москва"}'},
+        }
+    ]
+    return data
+
+
+def test_tool_call_reply_without_text_returns_tool_calls(polza, chat_route):
+    chat_route.respond(200, json=tool_call_reply())
+    result = polza.chat(model="m", messages=MESSAGES, tools=[{"type": "function"}])
+    assert result.text == "" and result.finish_reason == "tool_calls"
+    [call] = result.tool_calls
+    assert (call.id, call.name, call.arguments) == ("call_1", "get_weather", '{"city": "Москва"}')
+    assert call.parsed_arguments() == {"city": "Москва"}
+
+
+def test_plain_text_reply_has_no_tool_calls(polza, chat_route):
+    chat_route.respond(200, json=completion("ok"))
+    assert polza.chat(model="m", messages=MESSAGES).tool_calls == []
+
+
+def test_tool_call_arguments_must_decode_to_an_object():
+    from polza_extras import ToolCall
+
+    assert ToolCall(id="c", name="f").parsed_arguments() == {}
+    with pytest.raises(ValueError, match="not a JSON object"):
+        ToolCall(id="c", name="f", arguments="[1]").parsed_arguments()

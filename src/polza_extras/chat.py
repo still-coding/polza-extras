@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import Any
 
 from ._json import arr, obj
-from ._models import ChatResult, StreamEvent, Usage
+from ._models import ChatResult, StreamEvent, ToolCall, ToolCallDelta, Usage
 from .errors import EmptyResponseError
 
 
@@ -24,6 +24,21 @@ def _usage(usage: dict[str, Any]) -> Usage:
     )
 
 
+def _tool_calls(message: dict[str, Any]) -> list[ToolCall]:
+    calls: list[ToolCall] = []
+    for item in arr(message.get("tool_calls")):
+        call = obj(item)
+        function = obj(call.get("function"))
+        calls.append(
+            ToolCall(
+                id=call.get("id") or "",
+                name=function.get("name") or "",
+                arguments=function.get("arguments") or "",
+            )
+        )
+    return calls
+
+
 def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatResult:
     choices = arr(data.get("choices"))
     if not choices:
@@ -33,9 +48,10 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
     finish_reason: str | None = choice.get("finish_reason")
     reasoning: str | None = message.get("reasoning") or message.get("reasoning_content") or None
     text: str = message.get("content") or ""
+    tool_calls = _tool_calls(message)
     usage = obj(data.get("usage"))
     parsed_usage = _usage(usage)
-    if not text:
+    if not text and not tool_calls:
         if reasoning and reasoning_fallback:
             text = reasoning
         else:
@@ -52,6 +68,7 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
             )
     return ChatResult(
         text=text,
+        tool_calls=tool_calls,
         reasoning=reasoning,
         finish_reason=finish_reason,
         usage=parsed_usage,
@@ -63,6 +80,22 @@ def parse_chat(data: dict[str, Any], reasoning_fallback: bool = False) -> ChatRe
     )
 
 
+def _tool_call_deltas(delta: dict[str, Any]) -> list[ToolCallDelta]:
+    deltas: list[ToolCallDelta] = []
+    for position, item in enumerate(arr(delta.get("tool_calls"))):
+        call = obj(item)
+        function = obj(call.get("function"))
+        deltas.append(
+            ToolCallDelta(
+                index=call.get("index", position),
+                id=call.get("id"),
+                name=function.get("name"),
+                arguments=function.get("arguments") or "",
+            )
+        )
+    return deltas
+
+
 def parse_stream_chunk(data: dict[str, Any]) -> StreamEvent:
     choices = arr(data.get("choices"))
     choice = obj(choices[0]) if choices else {}
@@ -70,6 +103,7 @@ def parse_stream_chunk(data: dict[str, Any]) -> StreamEvent:
     usage = obj(data.get("usage"))
     return StreamEvent(
         delta=delta.get("content") or "",
+        tool_calls=_tool_call_deltas(delta),
         reasoning=delta.get("reasoning") or delta.get("reasoning_content") or None,
         finish_reason=choice.get("finish_reason"),
         usage=_usage(usage) if usage else None,

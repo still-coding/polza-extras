@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 
 from pydantic import BaseModel, Field
 
@@ -15,8 +16,24 @@ class Usage(BaseModel):
     total_tokens: int = 0
 
 
+class ToolCall(BaseModel):
+    """A function call the model asked for; `arguments` is the JSON string as the model wrote it."""
+
+    id: str
+    name: str
+    arguments: str = ""
+
+    def parsed_arguments(self) -> dict[str, Any]:
+        """`arguments` decoded; raises ValueError when they are not a JSON object."""
+        value: Any = json.loads(self.arguments or "{}")
+        if not isinstance(value, dict):
+            raise ValueError(f"tool call arguments are not a JSON object: {self.arguments!r}")
+        return cast("dict[str, Any]", value)
+
+
 class ChatResult(BaseModel):
     text: str
+    tool_calls: list[ToolCall] = Field(default_factory=list[ToolCall])
     reasoning: str | None = None
     finish_reason: str | None = None
     usage: Usage
@@ -27,10 +44,21 @@ class ChatResult(BaseModel):
     raw: dict[str, Any]
 
 
+class ToolCallDelta(BaseModel):
+    """A streamed piece of a tool call. The first piece of call `index` has `id` and `name`;
+    the `arguments` fragments of one index concatenate to the full JSON string."""
+
+    index: int
+    id: str | None = None
+    name: str | None = None
+    arguments: str = ""
+
+
 class StreamEvent(BaseModel):
     """One streamed chunk: a text delta, or the final chunk with usage and ruble cost."""
 
     delta: str = ""
+    tool_calls: list[ToolCallDelta] = Field(default_factory=list[ToolCallDelta])
     reasoning: str | None = None
     finish_reason: str | None = None
     usage: Usage | None = None

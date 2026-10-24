@@ -8,7 +8,8 @@ from polza_extras import AsyncPolza, AuthError, EmptyResponseError, NotFoundErro
 from tests.conftest import BASE, MESSAGES, completion, error_body
 from tests.fake_server import ConnectError, resp, sse
 from tests.test_account import HAIKU
-from tests.test_stream import USAGE, chunk
+from tests.test_chat import tool_call_reply
+from tests.test_stream import USAGE, chunk, tool_chunk
 
 
 async def test_chat_returns_text_and_cost(apolza, chat_route):
@@ -107,3 +108,16 @@ async def test_async_client_is_a_context_manager_that_closes_its_connections(ser
     async with AsyncPolza(api_key="k", http_client=server.async_http_client()) as polza:
         assert not polza.http.is_closed
     assert polza.http.is_closed
+
+
+async def test_chat_returns_tool_calls_without_text(apolza, chat_route):
+    chat_route.respond(200, json=tool_call_reply())
+    result = await apolza.chat("m", MESSAGES, tools=[{"type": "function"}])
+    assert result.text == "" and result.tool_calls[0].parsed_arguments() == {"city": "Москва"}
+
+
+async def test_stream_passes_tool_call_deltas_through(apolza, chat_route):
+    chat_route.stream(tool_chunk(0, '{"a"', "call_1", "f"), tool_chunk(0, ": 1}"), USAGE)
+    events = [e async for e in apolza.chat_stream("m", MESSAGES)]
+    assert events[0].tool_calls[0].name == "f"
+    assert "".join(d.arguments for e in events for d in e.tool_calls) == '{"a": 1}'

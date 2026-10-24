@@ -111,3 +111,30 @@ def test_every_name_in_all_is_importable():
     import polza_extras
 
     assert [n for n in polza_extras.__all__ if not hasattr(polza_extras, n)] == []
+
+
+def tool_chunk(index, arguments, call_id=None, name=None):
+    call = {"index": index, "function": {"arguments": arguments}}
+    if call_id is not None:
+        call |= {"id": call_id, "type": "function"}
+        call["function"]["name"] = name
+    data = chunk()
+    data["choices"][0]["delta"]["tool_calls"] = [call]
+    return data
+
+
+def test_stream_passes_tool_call_deltas_through(polza, chat_route):
+    chat_route.stream(
+        tool_chunk(0, "", "call_1", "get_weather"),
+        tool_chunk(0, '{"city": '),
+        tool_chunk(0, '"Москва"}'),
+        chunk(finish="tool_calls"),
+        USAGE,
+    )
+    events = list(polza.chat_stream("m", MESSAGES, tools=[{"type": "function"}]))
+    first = events[0].tool_calls[0]
+    assert (first.index, first.id, first.name, first.arguments) == (0, "call_1", "get_weather", "")
+    later = events[1].tool_calls[0]
+    assert (later.index, later.id, later.name) == (0, None, None)
+    assert "".join(e.tool_calls[0].arguments for e in events[:3]) == '{"city": "Москва"}'
+    assert events[3].tool_calls == [] and events[3].finish_reason == "tool_calls"

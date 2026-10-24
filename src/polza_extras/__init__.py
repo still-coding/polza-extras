@@ -7,6 +7,8 @@ from ._models import (
     Pricing,
     ReasoningInfo,
     StreamEvent,
+    ToolCall,
+    ToolCallDelta,
     Usage,
 )
 from .client import DEFAULT_BASE_URL, AsyncPolza, Polza
@@ -49,5 +51,7 @@ __all__ = [
     "ServerError",
     "StreamError",
     "StreamEvent",
+    "ToolCall",
+    "ToolCallDelta",
     "Usage",
 ]

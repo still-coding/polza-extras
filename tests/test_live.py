@@ -107,3 +107,28 @@ async def test_async_chat_and_stream():
         )
     ]
     assert events[-1].cost_rub
+
+
+def test_tool_call_reply_returns_parsed_tool_calls(polza):
+    weather = {
+        "type": "function",
+        "function": {
+            "name": "get_weather",
+            "description": "Weather in a city",
+            "parameters": {
+                "type": "object",
+                "properties": {"city": {"type": "string"}},
+                "required": ["city"],
+            },
+        },
+    }
+    result = polza.chat(
+        CHEAP,
+        [{"role": "user", "content": "Какая погода в Москве?"}],
+        max_tokens=100,
+        tools=[weather],
+        tool_choice={"type": "function", "function": {"name": "get_weather"}},
+        reasoning={"type": "disabled"},
+    )
+    [call] = result.tool_calls
+    assert call.name == "get_weather" and "city" in call.parsed_arguments()
