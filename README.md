@@ -8,14 +8,13 @@ Polza is OpenAI-compatible, so for chat you can use the `openai` SDK directly. T
 - **Typed errors** parsed from Polza's error body, with `trace_id` and the provider's real reason (`metadata.raw`), which is often hidden behind a generic «Некорректный запрос».
 - **Polza's retry rules** (which statuses to retry, `Retry-After`, own vs provider rate limits).
 - **Reasoning models**: a clear `EmptyResponseError` when thinking used up `max_tokens`, instead of an empty string.
+- **Tool calls, usage details, structured output**: parsed `tool_calls`, cached/reasoning token counts, `json_schema=` with a dict or a pydantic model.
 - **Catalog, balance and key info**: `models()`, `model()`, `balance()`, `key_info()`, with ruble prices as `Decimal` and a cost estimate.
 
 ## Install
 
-Not on PyPI yet:
-
 ```bash
-uv add "polza-extras @ git+https://github.com/still-coding/polza-extras"
+uv add polza-extras     # or: pip install polza-extras
 ```
 
 Python 3.11+. Dependencies: `openai`, `pydantic`.
@@ -40,6 +39,46 @@ data = polza.chat(model, messages, json=True)   # response_format={"type": "json
 polza.openai                               # the configured openai.OpenAI client, for anything else
 polza.close()                              # or: with Polza() as polza: ...
 ```
+
+### Tool calls
+
+```python
+result = polza.chat(model, messages, tools=[weather_tool])   # tools pass through as is
+for call in result.tool_calls:                # [] for a plain text reply
+    call.id, call.name, call.arguments        # arguments: the JSON string from the model
+    args = call.parsed_arguments()            # dict; ValueError if not a JSON object
+```
+
+A reply with tool calls usually has no text: `result.text == ""` and `finish_reason == "tool_calls"`. `EmptyResponseError` is raised only when there is neither text nor tool calls.
+
+In a stream, `event.tool_calls` holds the raw `ToolCallDelta` pieces: the first piece of a call has `index`, `id` and `name`; join the `arguments` fragments of one `index` to get the full JSON.
+
+### Usage details
+
+```python
+u = result.usage
+u.prompt_tokens, u.completion_tokens, u.total_tokens
+u.cached_tokens        # prompt tokens read from the prompt cache
+u.cache_write_tokens   # prompt tokens written to the prompt cache
+u.reasoning_tokens     # completion tokens spent on thinking
+```
+
+They are 0 when Polza does not report them. The last stream event carries the same `usage`.
+
+### Structured output
+
+```python
+from pydantic import BaseModel
+
+class City(BaseModel):
+    name: str
+    population_millions: float
+
+result = polza.chat(model, messages, json_schema=City, schema_name="city")
+city = City.model_validate_json(result.text)
+```
+
+`json_schema` takes a pydantic model class or a JSON Schema dict and sends `response_format={"type": "json_schema", "json_schema": {"name": schema_name, "schema": ..., "strict": True}}`. Not every provider supports it: check `json_schema_strict` in the model's provider capabilities. Strict mode on some providers also wants `"additionalProperties": false` and every property in `required`; pass a dict when you need full control. Use either `json=True` (any JSON object) or `json_schema`, not both.
 
 ### Streaming
 
@@ -94,7 +133,7 @@ All errors subclass `PolzaError` (`status`, `code`, `message`, `trace_id`, `meta
 | 408, 502 | `ServerError` | yes, backoff |
 | 503 | `ServerError` | yes, honors `Retry-After` |
 | connection failure | `PolzaConnectionError` | yes, backoff |
-| 200 with empty content | `EmptyResponseError` | no; carries `finish_reason`, `reasoning`, `usage`, `cost_rub` (still billed), `raw` |
+| 200 with no text and no tool calls | `EmptyResponseError` | no; carries `finish_reason`, `reasoning`, `usage`, `cost_rub` (still billed), `raw` |
 | error event inside a stream | `StreamError` | no |
 
 Polza doesn't charge for failed requests, so retrying is safe. Tune with `Polza(retry=RetryPolicy(max_retries=..., base_delay=..., max_wait=...))`.

@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0 — 2026-10-24
+
+First release on PyPI: `uv add polza-extras`.
+
+- Tool calls: `ChatResult.tool_calls` (`ToolCall` with `id`, `name`, `arguments` and `parsed_arguments()`). A reply with tool calls and no text no longer raises `EmptyResponseError`.
+- Streaming tool calls: `StreamEvent.tool_calls` passes `ToolCallDelta` pieces (`index`, `id`, `name`, `arguments` fragment) through as they arrive.
+- Usage details: `Usage.cached_tokens`, `Usage.cache_write_tokens`, `Usage.reasoning_tokens` (0 when Polza does not send them), in `chat()` and in the last stream event.
+- Structured output: `chat(..., json_schema=..., schema_name="response")` and the same in `chat_stream()`; takes a JSON Schema dict or a pydantic model class and sends a strict `json_schema` response format. Combining it with `json=True` or `response_format` raises `ValueError`.
+- CI runs on Python 3.11–3.14, plus 3.15 pre-releases as experimental.
+- Release workflow: tags `v*` are built with `uv build` and published to PyPI with Trusted Publishing.
+
 ## 0.1.0 — 2026-10-24
 
 First release. Not on PyPI yet; install from GitHub.
