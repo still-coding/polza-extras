@@ -215,3 +215,38 @@ def test_tool_call_arguments_must_decode_to_an_object():
     assert ToolCall(id="c", name="f").parsed_arguments() == {}
     with pytest.raises(ValueError, match="not a JSON object"):
         ToolCall(id="c", name="f", arguments="[1]").parsed_arguments()
+
+
+DETAILED_USAGE = {
+    "prompt_tokens": 2000,
+    "completion_tokens": 300,
+    "total_tokens": 2300,
+    "prompt_tokens_details": {"cached_tokens": 1500, "cache_write_tokens": 400},
+    "completion_tokens_details": {"reasoning_tokens": 120},
+    "cost_rub": 0.5,
+}
+
+
+def test_usage_reports_cached_cache_write_and_reasoning_tokens(polza, chat_route):
+    chat_route.respond(200, json=completion(usage=DETAILED_USAGE))
+    usage = polza.chat(model="m", messages=MESSAGES).usage
+    assert (usage.cached_tokens, usage.cache_write_tokens, usage.reasoning_tokens) == (
+        1500,
+        400,
+        120,
+    )
+
+
+def test_usage_details_default_to_zero_when_absent_or_null(polza, chat_route):
+    usage = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+    chat_route.respond(200, json=completion(usage=usage))
+    plain = polza.chat(model="m", messages=MESSAGES).usage
+    chat_route.respond(
+        200,
+        json=completion(
+            usage=usage | {"prompt_tokens_details": None, "completion_tokens_details": None}
+        ),
+    )
+    nulls = polza.chat(model="m", messages=MESSAGES).usage
+    for u in (plain, nulls):
+        assert (u.cached_tokens, u.cache_write_tokens, u.reasoning_tokens) == (0, 0, 0)

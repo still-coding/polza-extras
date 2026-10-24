@@ -132,3 +132,19 @@ def test_tool_call_reply_returns_parsed_tool_calls(polza):
     )
     [call] = result.tool_calls
     assert call.name == "get_weather" and "city" in call.parsed_arguments()
+
+
+def test_repeated_long_prompt_reports_cached_tokens(polza):
+    # Above the provider's minimum cacheable prompt; marked for caching the Anthropic way.
+    rules = " ".join(f"Правило {i}: отвечай коротко и вежливо." for i in range(600))
+    messages = [
+        {
+            "role": "system",
+            "content": [{"type": "text", "text": rules, "cache_control": {"type": "ephemeral"}}],
+        },
+        {"role": "user", "content": "Скажи «ок»"},
+    ]
+    first = polza.chat(CHEAP, messages, max_tokens=10, reasoning={"type": "disabled"})
+    second = polza.chat(CHEAP, messages, max_tokens=10, reasoning={"type": "disabled"})
+    assert first.usage.cache_write_tokens > 0 or first.usage.cached_tokens > 0
+    assert second.usage.cached_tokens > 0

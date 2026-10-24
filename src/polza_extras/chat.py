@@ -16,11 +16,20 @@ def _cost_rub(usage: dict[str, Any]) -> Decimal | None:
     return None
 
 
+def _int(data: dict[str, Any], key: str) -> int:
+    return int(data.get(key) or 0)
+
+
 def _usage(usage: dict[str, Any]) -> Usage:
+    prompt_details = obj(usage.get("prompt_tokens_details"))
+    completion_details = obj(usage.get("completion_tokens_details"))
     return Usage(
-        prompt_tokens=int(usage.get("prompt_tokens") or 0),
-        completion_tokens=int(usage.get("completion_tokens") or 0),
-        total_tokens=int(usage.get("total_tokens") or 0),
+        prompt_tokens=_int(usage, "prompt_tokens"),
+        completion_tokens=_int(usage, "completion_tokens"),
+        total_tokens=_int(usage, "total_tokens"),
+        cached_tokens=_int(prompt_details, "cached_tokens"),
+        cache_write_tokens=_int(prompt_details, "cache_write_tokens"),
+        reasoning_tokens=_int(completion_details, "reasoning_tokens"),
     )
 
 

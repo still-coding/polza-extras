@@ -8,7 +8,7 @@ from polza_extras import AsyncPolza, AuthError, EmptyResponseError, NotFoundErro
 from tests.conftest import BASE, MESSAGES, completion, error_body
 from tests.fake_server import ConnectError, resp, sse
 from tests.test_account import HAIKU
-from tests.test_chat import tool_call_reply
+from tests.test_chat import DETAILED_USAGE, tool_call_reply
 from tests.test_stream import USAGE, chunk, tool_chunk
 
 
@@ -121,3 +121,11 @@ async def test_stream_passes_tool_call_deltas_through(apolza, chat_route):
     events = [e async for e in apolza.chat_stream("m", MESSAGES)]
     assert events[0].tool_calls[0].name == "f"
     assert "".join(d.arguments for e in events for d in e.tool_calls) == '{"a": 1}'
+
+
+async def test_usage_details_in_chat_and_stream(apolza, chat_route):
+    chat_route.respond(200, json=completion(usage=DETAILED_USAGE))
+    assert (await apolza.chat("m", MESSAGES)).usage.cache_write_tokens == 400
+    chat_route.stream(chunk("ок"), USAGE | {"usage": DETAILED_USAGE})
+    events = [e async for e in apolza.chat_stream("m", MESSAGES)]
+    assert events[-1].usage.cached_tokens == 1500 and events[-1].usage.reasoning_tokens == 120

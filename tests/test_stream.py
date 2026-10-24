@@ -138,3 +138,15 @@ def test_stream_passes_tool_call_deltas_through(polza, chat_route):
     assert (later.index, later.id, later.name) == (0, None, None)
     assert "".join(e.tool_calls[0].arguments for e in events[:3]) == '{"city": "Москва"}'
     assert events[3].tool_calls == [] and events[3].finish_reason == "tool_calls"
+
+
+def test_stream_final_usage_has_cache_and_reasoning_details(polza, chat_route):
+    from tests.test_chat import DETAILED_USAGE
+
+    chat_route.stream(chunk("ок"), USAGE | {"usage": DETAILED_USAGE})
+    usage = list(polza.chat_stream("m", MESSAGES))[-1].usage
+    assert (usage.cached_tokens, usage.cache_write_tokens, usage.reasoning_tokens) == (
+        1500,
+        400,
+        120,
+    )
