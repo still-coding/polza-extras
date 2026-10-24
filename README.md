@@ -15,7 +15,7 @@ Polza is OpenAI-compatible, so for chat you can use the `openai` SDK directly. T
 Not on PyPI yet:
 
 ```bash
-uv add "polza-extras @ git+https://github.com/<owner>/polza-extras"
+uv add "polza-extras @ git+https://github.com/still-coding/polza-extras"
 ```
 
 Python 3.11+. Dependencies: `openai`, `pydantic`.
