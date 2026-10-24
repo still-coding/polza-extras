@@ -150,3 +150,12 @@ def test_stream_final_usage_has_cache_and_reasoning_details(polza, chat_route):
         400,
         120,
     )
+
+
+def test_stream_sends_json_schema_response_format(polza, chat_route):
+    from tests.test_chat import PERSON
+
+    chat_route.stream(chunk('{"name": "Аня"}'), USAGE)
+    list(polza.chat_stream("m", MESSAGES, json_schema=PERSON))
+    sent = json.loads(chat_route.last_request.content)["response_format"]
+    assert sent["type"] == "json_schema" and sent["json_schema"]["schema"] == PERSON

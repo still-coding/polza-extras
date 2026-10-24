@@ -148,3 +148,23 @@ def test_repeated_long_prompt_reports_cached_tokens(polza):
     second = polza.chat(CHEAP, messages, max_tokens=10, reasoning={"type": "disabled"})
     assert first.usage.cache_write_tokens > 0 or first.usage.cached_tokens > 0
     assert second.usage.cached_tokens > 0
+
+
+def test_json_schema_returns_an_object_matching_the_schema(polza):
+    import json
+
+    from pydantic import BaseModel
+
+    class City(BaseModel):
+        name: str
+        population_millions: float
+
+    result = polza.chat(
+        CHEAP,
+        [{"role": "user", "content": "Столица России и её население в миллионах"}],
+        max_tokens=100,
+        json_schema=City,
+        schema_name="city",
+        reasoning={"type": "disabled"},
+    )
+    assert City.model_validate(json.loads(result.text)).name

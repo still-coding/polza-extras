@@ -8,6 +8,7 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
 from typing import Any, Self, TypeVar
 
 import openai
+from pydantic import BaseModel
 
 from ._json import arr, obj
 from ._models import Balance, ChatResult, KeyInfo, ModelInfo, ModelPage, StreamEvent
@@ -53,6 +54,11 @@ def _stream_error(exc: openai.APIError) -> StreamError:
     )
 
 
+def _schema_format(json_schema: dict[str, Any] | type[BaseModel], name: str) -> dict[str, Any]:
+    schema = json_schema if isinstance(json_schema, dict) else json_schema.model_json_schema()
+    return {"type": "json_schema", "json_schema": {"name": name, "schema": schema, "strict": True}}
+
+
 def _chat_params(
     model: str,
     messages: list[dict[str, Any]],
@@ -61,12 +67,18 @@ def _chat_params(
     json: bool,
     extra: dict[str, Any],
     stream: bool = False,
+    json_schema: dict[str, Any] | type[BaseModel] | None = None,
+    schema_name: str = "response",
 ) -> dict[str, Any]:
     params: dict[str, Any] = {"model": model, "messages": messages}
     if max_tokens is not None:
         params["max_tokens"] = max_tokens
     if temperature is not None:
         params["temperature"] = temperature
+    if json_schema is not None:
+        if json or "response_format" in extra:
+            raise ValueError("pass json_schema alone, without json=True or response_format")
+        extra["response_format"] = _schema_format(json_schema, schema_name)
     if json:
         extra.setdefault("response_format", {"type": "json_object"})
     if extra:
@@ -188,9 +200,24 @@ class Polza:
         temperature: float | None = None,
         reasoning_fallback: bool = False,
         json: bool = False,
+        json_schema: dict[str, Any] | type[BaseModel] | None = None,
+        schema_name: str = "response",
         **extra: Any,
     ) -> ChatResult:
-        params = _chat_params(model, messages, max_tokens, temperature, json, extra)
+        """One chat completion. `json=True` asks for any JSON object; `json_schema` (a JSON Schema
+        dict or a pydantic model class) asks for strict structured output under `schema_name`.
+        Other keyword arguments (tools, reasoning, provider, ...) go to Polza as is."""
+        params = _chat_params(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+            json,
+            extra,
+            stream=False,
+            json_schema=json_schema,
+            schema_name=schema_name,
+        )
 
         def call() -> dict[str, Any]:
             raw = self._completions.with_raw_response.create(**params)
@@ -206,6 +233,8 @@ class Polza:
         max_tokens: int | None = None,
         temperature: float | None = None,
         json: bool = False,
+        json_schema: dict[str, Any] | type[BaseModel] | None = None,
+        schema_name: str = "response",
         **extra: Any,
     ) -> Iterator[StreamEvent]:
         """Stream a chat completion. The last event carries `usage` and `cost_rub`.
@@ -213,7 +242,17 @@ class Polza:
         Errors before the first chunk are retried like `chat()`; an error event inside the stream
         raises StreamError (text already yielded stays yielded).
         """
-        params = _chat_params(model, messages, max_tokens, temperature, json, extra, stream=True)
+        params = _chat_params(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+            json,
+            extra,
+            stream=True,
+            json_schema=json_schema,
+            schema_name=schema_name,
+        )
         stream = self._with_retries(lambda: self._completions.create(**params))
         try:
             for chunk in stream:
@@ -318,9 +357,22 @@ class AsyncPolza:
         temperature: float | None = None,
         reasoning_fallback: bool = False,
         json: bool = False,
+        json_schema: dict[str, Any] | type[BaseModel] | None = None,
+        schema_name: str = "response",
         **extra: Any,
     ) -> ChatResult:
-        params = _chat_params(model, messages, max_tokens, temperature, json, extra)
+        """Async version of Polza.chat."""
+        params = _chat_params(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+            json,
+            extra,
+            stream=False,
+            json_schema=json_schema,
+            schema_name=schema_name,
+        )
 
         async def call() -> dict[str, Any]:
             raw = await self._completions.with_raw_response.create(**params)
@@ -336,10 +388,22 @@ class AsyncPolza:
         max_tokens: int | None = None,
         temperature: float | None = None,
         json: bool = False,
+        json_schema: dict[str, Any] | type[BaseModel] | None = None,
+        schema_name: str = "response",
         **extra: Any,
     ) -> AsyncIterator[StreamEvent]:
         """Async version of Polza.chat_stream: `async for event in polza.chat_stream(...)`."""
-        params = _chat_params(model, messages, max_tokens, temperature, json, extra, stream=True)
+        params = _chat_params(
+            model,
+            messages,
+            max_tokens,
+            temperature,
+            json,
+            extra,
+            stream=True,
+            json_schema=json_schema,
+            schema_name=schema_name,
+        )
 
         async def call() -> Any:
             return await self._completions.create(**params)

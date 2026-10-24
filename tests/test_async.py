@@ -1,5 +1,6 @@
 """AsyncPolza mirrors Polza; these check each method once plus retries and stream errors."""
 
+import json
 from decimal import Decimal
 
 import pytest
@@ -8,7 +9,7 @@ from polza_extras import AsyncPolza, AuthError, EmptyResponseError, NotFoundErro
 from tests.conftest import BASE, MESSAGES, completion, error_body
 from tests.fake_server import ConnectError, resp, sse
 from tests.test_account import HAIKU
-from tests.test_chat import DETAILED_USAGE, tool_call_reply
+from tests.test_chat import DETAILED_USAGE, PERSON, tool_call_reply
 from tests.test_stream import USAGE, chunk, tool_chunk
 
 
@@ -129,3 +130,20 @@ async def test_usage_details_in_chat_and_stream(apolza, chat_route):
     chat_route.stream(chunk("ок"), USAGE | {"usage": DETAILED_USAGE})
     events = [e async for e in apolza.chat_stream("m", MESSAGES)]
     assert events[-1].usage.cached_tokens == 1500 and events[-1].usage.reasoning_tokens == 120
+
+
+async def test_json_schema_in_chat_and_stream(apolza, chat_route):
+    expected = {
+        "type": "json_schema",
+        "json_schema": {"name": "person", "schema": PERSON, "strict": True},
+    }
+    chat_route.respond(200, json=completion('{"name": "Аня"}'))
+    await apolza.chat("m", MESSAGES, json_schema=PERSON, schema_name="person")
+    assert json.loads(chat_route.last_request.content)["response_format"] == expected
+    chat_route.stream(chunk('{"name": "Аня"}'), USAGE)
+    _ = [
+        e async for e in apolza.chat_stream("m", MESSAGES, json_schema=PERSON, schema_name="person")
+    ]
+    assert json.loads(chat_route.last_request.content)["response_format"] == expected
+    with pytest.raises(ValueError, match="json_schema"):
+        await apolza.chat("m", MESSAGES, json=True, json_schema=PERSON)

@@ -250,3 +250,45 @@ def test_usage_details_default_to_zero_when_absent_or_null(polza, chat_route):
     nulls = polza.chat(model="m", messages=MESSAGES).usage
     for u in (plain, nulls):
         assert (u.cached_tokens, u.cache_write_tokens, u.reasoning_tokens) == (0, 0, 0)
+
+
+PERSON = {
+    "type": "object",
+    "properties": {"name": {"type": "string"}},
+    "required": ["name"],
+    "additionalProperties": False,
+}
+
+
+def test_json_schema_requests_strict_structured_output(polza, chat_route):
+    chat_route.respond(200, json=completion('{"name": "Аня"}'))
+    polza.chat(model="m", messages=MESSAGES, json_schema=PERSON, schema_name="person")
+    assert json.loads(chat_route.last_request.content)["response_format"] == {
+        "type": "json_schema",
+        "json_schema": {"name": "person", "schema": PERSON, "strict": True},
+    }
+
+
+def test_json_schema_accepts_a_pydantic_model_class(polza, chat_route):
+    from pydantic import BaseModel
+
+    class Person(BaseModel):
+        name: str
+
+    chat_route.respond(200, json=completion('{"name": "Аня"}'))
+    polza.chat(model="m", messages=MESSAGES, json_schema=Person)
+    sent = json.loads(chat_route.last_request.content)["response_format"]["json_schema"]
+    assert sent["name"] == "response" and sent["schema"] == Person.model_json_schema()
+
+
+def test_json_schema_conflicts_with_json_flag_and_response_format(polza, chat_route):
+    with pytest.raises(ValueError, match="json_schema"):
+        polza.chat(model="m", messages=MESSAGES, json=True, json_schema=PERSON)
+    with pytest.raises(ValueError, match="json_schema"):
+        polza.chat(
+            model="m",
+            messages=MESSAGES,
+            json_schema=PERSON,
+            response_format={"type": "json_object"},
+        )
+    assert chat_route.call_count == 0
