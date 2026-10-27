@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.0 — 2026-10-27
+
+- Image generation: `generate_image(model, prompt, aspect_ratio=, images=, seed=, image_resolution=, output_format=, poll_interval=, timeout=, download=)` over `POST /v1/media` as an `async` job polled with `GET /v1/media/{id}` (no long HTTP requests), returns `ImageResult` (`data`, `mime`, `url`, `cost_rub`, `id`, `model`, `raw`). Reference images as bytes, path or URL (at most 8). The result file is downloaded (Polza deletes its copy after 7 days). `AsyncPolza.generate_image` too.
+- `wait_image(job_id)` resumes a job after `MediaTimeoutError`, without starting a new one.
+- Typed job errors: `MediaFailedError` (`id`, `code`, `provider`, `retryable`), `MediaModeratedError` for `guard_blocked` / `guard_no_route`, `MediaTimeoutError`. Failed jobs are never resent.
+- Starting, polling and downloading are retried by the usual `RetryPolicy`.
+
 ## 0.2.1 — 2026-10-24
 
 Discoverability only, no code changes.

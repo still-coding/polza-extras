@@ -4,16 +4,32 @@ import asyncio
 import os
 import random
 import time
-from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator, Sequence
+from pathlib import Path
 from typing import Any, Self, TypeVar
 
 import openai
 from pydantic import BaseModel
 
+from . import media
 from ._json import arr, obj
-from ._models import Balance, ChatResult, KeyInfo, ModelInfo, ModelPage, StreamEvent
+from ._models import (
+    Balance,
+    ChatResult,
+    ImageResult,
+    KeyInfo,
+    ModelInfo,
+    ModelPage,
+    StreamEvent,
+)
 from .chat import parse_chat, parse_stream_chunk
-from .errors import PolzaConnectionError, PolzaError, StreamError, error_from_response
+from .errors import (
+    MediaTimeoutError,
+    PolzaConnectionError,
+    PolzaError,
+    StreamError,
+    error_from_response,
+)
 from .retry import RetryPolicy
 
 DEFAULT_BASE_URL = "https://polza.ai/api/v1"
@@ -129,6 +145,14 @@ def _parse_page(data: Any, page: int, limit: int | None) -> ModelPage:
     )
 
 
+def _download_error(status: int, response: Any) -> PolzaError:
+    try:
+        body = response.json()
+    except ValueError:
+        body = None
+    return error_from_response(status, body, dict(response.headers))
+
+
 def _balance_url(base_url: str) -> str:
     return base_url.rstrip("/").removesuffix("/v1") + "/v2/balance"
 
@@ -186,6 +210,8 @@ class Polza:
                 return call()
             except (openai.APIStatusError, openai.APIConnectionError) as exc:
                 error = _translate(exc)
+            except PolzaError as exc:  # e.g. a failed file download
+                error = exc
             delay = self.retry.delay_for(error, attempt, self._rng)
             if delay is None:
                 raise error
@@ -303,6 +329,89 @@ class Polza:
         data = self._get("/key")
         return KeyInfo.model_validate(data.get("data", data))
 
+    # --- images ----------------------------------------------------------------
+
+    def generate_image(
+        self,
+        model: str,
+        prompt: str,
+        *,
+        aspect_ratio: str | None = None,
+        images: Sequence[bytes | str | Path] = (),
+        seed: int | None = None,
+        image_resolution: str | None = None,
+        output_format: str | None = None,
+        poll_interval: float = 4.0,
+        timeout: float = 300.0,
+        download: bool = True,
+        **extra: Any,
+    ) -> ImageResult:
+        """Generate one image: start an async job on /media and poll it until it is done.
+
+        `images` are reference images (bytes, a file path or a URL; at most 8). Other keyword
+        arguments go into the job's `input` as is. `timeout` is the time spent waiting between
+        polls: past it MediaTimeoutError carries the job id for `wait_image`. Starting and polling
+        are retried like chat(); a failed job raises MediaFailedError (MediaModeratedError for a
+        moderation block) and is never resent. With `download=False` only `url` is set.
+        """
+        body = media.request_body(
+            model, prompt, aspect_ratio, list(images), seed, image_resolution, output_format, extra
+        )
+        job = self._with_retries(
+            lambda: self.openai.post("/media", body=body, cast_to=object)  # pyright: ignore[reportUnknownLambdaType]
+        )
+        return self._finish_image(job, model, poll_interval, timeout, download)
+
+    def wait_image(
+        self,
+        job_id: str,
+        model: str | None = None,
+        *,
+        poll_interval: float = 4.0,
+        timeout: float = 300.0,
+        download: bool = True,
+    ) -> ImageResult:
+        """Wait for an image job that is already running (e.g. after MediaTimeoutError)."""
+        return self._finish_image(
+            {"id": job_id}, model, poll_interval, timeout, download, poll=True
+        )
+
+    def _finish_image(
+        self,
+        job: Any,
+        model: str | None,
+        poll_interval: float,
+        timeout: float,
+        download: bool,
+        poll: bool = False,
+    ) -> ImageResult:
+        job_id = str(job.get("id", ""))
+        waited = 0.0
+        while True:
+            if poll:
+                job = self._get(f"/media/{job_id}")
+            result = media.settle(job, model)
+            if result is not None:
+                return self._fetch_image(result) if download and result.data is None else result
+            if waited >= timeout:
+                raise MediaTimeoutError(job_id, media.status_of(job), waited)
+            self._sleep(poll_interval)
+            waited += poll_interval
+            poll = True
+
+    def _fetch_image(self, result: ImageResult) -> ImageResult:
+        def call() -> bytes:
+            try:
+                response = self.http.get(result.url)
+            except media.TRANSPORT_ERROR as exc:
+                raise PolzaConnectionError(str(exc)) from exc
+            if response.status_code >= 400:
+                raise _download_error(response.status_code, response)
+            data: bytes = response.content
+            return data
+
+        return media.with_file(result, self._with_retries(call))
+
 
 class AsyncPolza:
     """Async mirror of Polza on openai.AsyncOpenAI; same methods, awaited."""
@@ -343,6 +452,8 @@ class AsyncPolza:
                 return await call()
             except (openai.APIStatusError, openai.APIConnectionError) as exc:
                 error = _translate(exc)
+            except PolzaError as exc:  # e.g. a failed file download
+                error = exc
             delay = self.retry.delay_for(error, attempt, self._rng)
             if delay is None:
                 raise error
@@ -450,3 +561,83 @@ class AsyncPolza:
     async def key_info(self) -> KeyInfo:
         data = await self._get("/key")
         return KeyInfo.model_validate(data.get("data", data))
+
+    # --- images ----------------------------------------------------------------
+
+    async def generate_image(
+        self,
+        model: str,
+        prompt: str,
+        *,
+        aspect_ratio: str | None = None,
+        images: Sequence[bytes | str | Path] = (),
+        seed: int | None = None,
+        image_resolution: str | None = None,
+        output_format: str | None = None,
+        poll_interval: float = 4.0,
+        timeout: float = 300.0,
+        download: bool = True,
+        **extra: Any,
+    ) -> ImageResult:
+        """Async version of Polza.generate_image."""
+        body = media.request_body(
+            model, prompt, aspect_ratio, list(images), seed, image_resolution, output_format, extra
+        )
+
+        async def start() -> Any:
+            return await self.openai.post("/media", body=body, cast_to=object)
+
+        job = await self._with_retries(start)
+        return await self._finish_image(job, model, poll_interval, timeout, download)
+
+    async def wait_image(
+        self,
+        job_id: str,
+        model: str | None = None,
+        *,
+        poll_interval: float = 4.0,
+        timeout: float = 300.0,
+        download: bool = True,
+    ) -> ImageResult:
+        """Async version of Polza.wait_image."""
+        return await self._finish_image(
+            {"id": job_id}, model, poll_interval, timeout, download, poll=True
+        )
+
+    async def _finish_image(
+        self,
+        job: Any,
+        model: str | None,
+        poll_interval: float,
+        timeout: float,
+        download: bool,
+        poll: bool = False,
+    ) -> ImageResult:
+        job_id = str(job.get("id", ""))
+        waited = 0.0
+        while True:
+            if poll:
+                job = await self._get(f"/media/{job_id}")
+            result = media.settle(job, model)
+            if result is not None:
+                if download and result.data is None:
+                    return await self._fetch_image(result)
+                return result
+            if waited >= timeout:
+                raise MediaTimeoutError(job_id, media.status_of(job), waited)
+            await self._sleep(poll_interval)
+            waited += poll_interval
+            poll = True
+
+    async def _fetch_image(self, result: ImageResult) -> ImageResult:
+        async def call() -> bytes:
+            try:
+                response = await self.http.get(result.url)
+            except media.TRANSPORT_ERROR as exc:
+                raise PolzaConnectionError(str(exc)) from exc
+            if response.status_code >= 400:
+                raise _download_error(response.status_code, response)
+            data: bytes = response.content
+            return data
+
+        return media.with_file(result, await self._with_retries(call))

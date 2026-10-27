@@ -78,6 +78,53 @@ class NotFoundError(RequestError):
     """404: unknown model or endpoint (a model id without the provider/ prefix is a 404 too)."""
 
 
+class MediaFailedError(PolzaError):
+    """An image job that ended `failed` or `cancelled`, or finished without a picture.
+
+    `id` is the job id, `code` Polza's error code (`BAD_GATEWAY`, `guard_blocked`, ...) and
+    `provider` the upstream's name. `retryable` is True for transient codes (timeout, bad gateway,
+    unavailable, rate limit): a new job may work. The library never resends a job itself, since
+    Polza does not say whether a failed job is billed.
+    """
+
+    def __init__(
+        self,
+        id: str,
+        code: str,
+        message: str,
+        metadata: dict[str, Any] | None = None,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(200, message, code=code, metadata=metadata)
+        self.id = id
+        self.retryable = retryable
+
+    @property
+    def provider(self) -> str | None:
+        name = self.metadata.get("provider_name")
+        return str(name) if name else None
+
+
+class MediaModeratedError(MediaFailedError):
+    """The job was blocked by moderation (`guard_blocked`) or has no route (`guard_no_route`).
+    Never retry the same prompt."""
+
+
+class MediaTimeoutError(PolzaError):
+    """The job was still pending or processing when the wait ran out.
+
+    The job keeps running (and may be billed): `wait_image(error.id)` picks it up again.
+    """
+
+    def __init__(self, id: str, status: str, waited: float) -> None:
+        super().__init__(
+            0, f"image job {id} still {status} after {waited:.0f} s", code="REQUEST_TIMEOUT"
+        )
+        self.id = id
+        self.status = status
+        self.waited = waited
+
+
 class PolzaConnectionError(PolzaError):
     """The request never got an HTTP response (DNS, connect, timeout)."""
 

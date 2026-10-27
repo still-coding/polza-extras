@@ -122,6 +122,21 @@ polza.balance()    # Balance(amount, available, reserved, spent, updated_at)
 polza.key_info()   # KeyInfo(label, limit, limit_remaining, limit_reset, usage, usage_daily, ...)
 ```
 
+### Images
+
+```python
+result = polza.generate_image(
+    "google/gemini-2.5-flash-image",
+    "Portrait of a woman, semi-realistic illustration",
+    aspect_ratio="3:4",
+    images=[portrait_bytes],   # reference images: bytes, a file path or a URL (at most 8)
+    seed=7,                    # not every model takes one
+)
+result.data, result.mime, result.cost_rub, result.url   # the file, its type, ₽, Polza's copy
+```
+
+The call starts an `async` job on `/media` and polls it every `poll_interval` seconds (default 4, Polza advises 3-5) until it is done, so no single HTTP request is long. `timeout` (default 300 s) is the time spent waiting; past it `MediaTimeoutError` carries the job `id` and `polza.wait_image(id)` picks the same job up, so it is never started twice. Starting and polling are retried like `chat()`. A job that ends `failed`/`cancelled` raises `MediaFailedError` (`id`, `code`, `provider`, `retryable`); a moderation block (`guard_blocked`, `guard_no_route`) raises `MediaModeratedError`. A failed job is never resent by the library: Polza does not say whether it is billed, so resending is your decision (`retryable` is True for timeout, bad gateway, unavailable and rate-limit codes). Polza deletes results after 7 days, so the file is downloaded by default (`download=False` keeps only `url`). `AsyncPolza.generate_image` and `wait_image` are the awaited twins.
+
 ## Errors
 
 All errors subclass `PolzaError` (`status`, `code`, `message`, `trace_id`, `metadata`, `details`, `retry_after`).
@@ -140,6 +155,8 @@ All errors subclass `PolzaError` (`status`, `code`, `message`, `trace_id`, `meta
 | connection failure | `PolzaConnectionError` | yes, backoff |
 | 200 with no text and no tool calls | `EmptyResponseError` | no; carries `finish_reason`, `reasoning`, `usage`, `cost_rub` (still billed), `raw` |
 | error event inside a stream | `StreamError` | no |
+| image job `failed` / `cancelled` | `MediaFailedError` (`MediaModeratedError` for moderation) | no, the job is never resent |
+| image job still running when the wait ends | `MediaTimeoutError` (`id`, `status`) | no; resume with `wait_image(id)` |
 
 Polza doesn't charge for failed requests, so retrying is safe. Tune with `Polza(retry=RetryPolicy(max_retries=..., base_delay=..., max_wait=...))`.
 

@@ -60,6 +60,19 @@ class ToolCallDelta(BaseModel):
     arguments: str = ""
 
 
+class ImageResult(BaseModel):
+    """A generated image. `data` is the file (None with `download=False`); `url` is Polza's copy,
+    deleted after 7 days; `mime` is sniffed from the file."""
+
+    id: str
+    model: str
+    data: bytes | None = None
+    url: str | None = None
+    mime: str | None = None
+    cost_rub: Decimal | None = None
+    raw: dict[str, Any]
+
+
 class StreamEvent(BaseModel):
     """One streamed chunk: a text delta, or the final chunk with usage and ruble cost."""
 

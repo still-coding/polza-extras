@@ -168,3 +168,19 @@ def test_json_schema_returns_an_object_matching_the_schema(polza):
         reasoning={"type": "disabled"},
     )
     assert City.model_validate(json.loads(result.text)).name
+
+
+def test_generate_image_async_job_returns_a_picture_and_its_cost(polza):
+    """One cheap image (~3 ₽) through the async job + polling path."""
+    import time
+
+    started = time.monotonic()
+    result = polza.generate_image(
+        "google/gemini-2.5-flash-image",
+        "A simple flat illustration of a red bicycle on a white background.",
+        aspect_ratio="1:1",
+        timeout=300,
+    )
+    print(f"image in {time.monotonic() - started:.0f} s, {result.cost_rub} ₽, {result.mime}")
+    assert result.data and result.mime in {"image/png", "image/jpeg"}
+    assert result.cost_rub is not None and result.cost_rub > 0
